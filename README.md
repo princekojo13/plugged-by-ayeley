@@ -10,7 +10,7 @@ The application is built with React, Vite, Tailwind CSS, and Supabase.
 - Shopping cart and guest checkout
 - Moolre Mobile Money payment requests
 - Pay on Delivery for eligible Greater Accra orders
-- Google Maps delivery pin selection and order tracking
+- Free OpenStreetMap delivery pin selection and order tracking
 - Product reviews and customer inquiries
 - Secure administrator dashboard for products, orders, and store settings
 - Supabase Row Level Security and Edge Functions
@@ -21,7 +21,7 @@ Install packages with `npm install`, then start the development server with `npm
 
 ## Service configuration
 
-Add `VITE_GOOGLE_MAPS_API_KEY` to the Render environment and local `.env` file. In Google Cloud, enable the Maps JavaScript API and billing, then restrict the key to the live website referrers and local development origins. Until the key is set, checkout allows a Ghana coordinate pin to be entered manually.
+The delivery map uses OpenStreetMap tiles through Leaflet and does not require a Google Maps API key or billing. Keep the visible OpenStreetMap attribution in the map UI. The public OpenStreetMap tile service is community operated, so map tile availability is subject to its usage policy.
 
 Configure these as Supabase Edge Function secrets before turning on Moolre in Store Settings:
 

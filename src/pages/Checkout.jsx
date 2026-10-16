@@ -13,7 +13,7 @@ import {
 import { useCart } from "@/lib/cartContext";
 import { supabase } from "@/lib/supabaseClient";
 import { SITE_CONFIG } from "@/lib/siteConfig";
-import GooglePinPicker from "@/components/GooglePinPicker";
+import LeafletPinPicker from "@/components/LeafletPinPicker";
 
 const PAYMENT_METHODS = {
   moolre: "moolre",
@@ -843,7 +843,7 @@ export default function Checkout() {
                     Click or tap the map to place a pin, then drag it to your delivery point. The location is used to calculate delivery distance.
                   </p>
                   <div className="overflow-hidden border border-border">
-                    <GooglePinPicker
+                    <LeafletPinPicker
                       location={deliveryLocation}
                       onSelect={setDeliveryLocation}
                     />
