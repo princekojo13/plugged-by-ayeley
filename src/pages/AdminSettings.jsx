@@ -26,7 +26,7 @@ const DEFAULT_SETTINGS = {
   max_delivery_distance_km: "",
   low_stock_default: 5,
   cod_enabled: true,
-  paystack_enabled: true,
+  moolre_enabled: false,
   cod_accra_only: true,
   cod_max_distance_km: 30,
   paystack_hold_minutes: 30,
@@ -110,7 +110,7 @@ export default function AdminSettings() {
       ? null
       : Number(settings.cod_max_distance_km);
     for (const field of [
-      "cod_enabled", "paystack_enabled", "cod_accra_only", "store_open", "maintenance_mode",
+      "cod_enabled", "moolre_enabled", "cod_accra_only", "store_open", "maintenance_mode",
     ]) payload[field] = Boolean(settings[field]);
 
     if (!payload.store_name?.trim() || !payload.address?.trim()) {
@@ -206,7 +206,7 @@ export default function AdminSettings() {
 
           <SettingsSection title="Checkout and inventory" description="Control payment options and stock reservation timing.">
             <div className="grid gap-5 md:grid-cols-2">
-              <Toggle label="Online payment" description="Allow customers to pay through paystack." checked={settings.paystack_enabled} onChange={(value) => updateField("paystack_enabled", value)} />
+              <Toggle label="Moolre Mobile Money" description="Allow customers to pay online through a Mobile Money request." checked={settings.moolre_enabled} onChange={(value) => updateField("moolre_enabled", value)} />
               <Toggle label="Cash on delivery" description="Allow customers to pay when their order arrives." checked={settings.cod_enabled} onChange={(value) => updateField("cod_enabled", value)} />
               <NumberField label="Low stock alert threshold" value={settings.low_stock_default} min="0" step="1" onChange={(value) => updateField("low_stock_default", value)} />
               <NumberField label="Online payment stock hold (minutes)" value={settings.paystack_hold_minutes} min="1" step="1" onChange={(value) => updateField("paystack_hold_minutes", value)} />

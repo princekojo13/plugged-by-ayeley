@@ -139,6 +139,7 @@ export default function AdminOrders() {
           payment_status,
           paid_at,
           payment_reference:paystack_reference,
+          moolre_reference,
           status:order_status,
           order_note:delivery_instructions,
           whatsapp_number,
@@ -357,6 +358,26 @@ export default function AdminOrders() {
     } catch (err) {
       console.error("Could not verify paystack payment:", err);
       setError(err?.message || "Could not verify the payment with paystack.");
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const verifyMoolrePayment = async (order) => {
+    if (updating === order.id || order.payment_method !== "moolre" || order.payment_status === "paid") return;
+    setUpdating(order.id);
+    setError("");
+    try {
+      const { data, error: verifyError } = await supabase.functions.invoke("moolre-payment", {
+        body: { action: "status", order_number: order.order_number, phone: order.momo_number },
+      });
+      if (verifyError || !data?.success) throw verifyError || new Error(data?.error || "Moolre status could not be checked.");
+      await loadOrders(true);
+      if (data.payment_status === "paid") toast({ variant: "success", title: "Payment verified", description: `Moolre confirmed payment for order #${order.order_number}.` });
+      else setError(`Moolre has not confirmed payment for order #${order.order_number} yet.`);
+    } catch (err) {
+      console.error("Could not verify Moolre payment:", err);
+      setError(err?.message || "Could not verify the payment with Moolre.");
     } finally {
       setUpdating(null);
     }
@@ -648,7 +669,7 @@ export default function AdminOrders() {
                       <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-bold">{formatGhs(storedTotal)}</td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <span className={`text-sm font-semibold capitalize ${paymentClass(order.payment_status)}`}>{order.payment_status || "—"}</span>
-                        <p className="mt-0.5 text-xs text-black/40">{order.payment_method === "cash_on_delivery" ? "Pay on Delivery" : "Pay Online"}</p>
+                        <p className="mt-0.5 text-xs text-black/40">{order.payment_method === "cash_on_delivery" ? "Pay on Delivery" : order.payment_method === "moolre" ? "Moolre Mobile Money" : order.payment_method === "paystack" ? "Paystack" : "Pay Online"}</p>
                         {order.payment_method === "cash_on_delivery" &&
                           ["pending", "failed"].includes(order.payment_status) &&
                           order.status !== "cancelled" && (
@@ -663,6 +684,11 @@ export default function AdminOrders() {
                               {updating === order.id ? "Checking…" : "Check paystack"}
                             </button>
                           )}
+                        {order.payment_method === "moolre" && ["pending", "failed"].includes(order.payment_status) && (
+                          <button type="button" onClick={() => verifyMoolrePayment(order)} disabled={updating === order.id} className="mt-2 rounded-lg border border-black/15 px-2.5 py-1.5 text-[11px] font-bold text-black/70 transition hover:border-[#ff1f8f] hover:text-[#e60078] disabled:cursor-not-allowed disabled:opacity-60">
+                            {updating === order.id ? "Checking…" : "Check Moolre"}
+                          </button>
+                        )}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(order.status)}`}>{statusLabel(order.status)}</span>

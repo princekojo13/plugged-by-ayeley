@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
         .limit(100),
       supabaseAdmin
         .from("store_settings")
-        .select("brand_name:store_name,tagline,email,phone,whatsapp,store_open,maintenance_mode,pay_online_enabled:paystack_enabled,pay_on_delivery_enabled:cod_enabled,pay_on_delivery_accra_only:cod_accra_only,delivery_fee_amount:delivery_rate,delivery_distance_km:delivery_distance_unit")
+        .select("brand_name:store_name,tagline,email,phone,whatsapp,store_open,maintenance_mode,pay_online_enabled:moolre_enabled,pay_on_delivery_enabled:cod_enabled,pay_on_delivery_accra_only:cod_accra_only,delivery_fee_amount:delivery_rate,delivery_distance_km:delivery_distance_unit")
         .eq("id", true)
         .maybeSingle(),
     ]);
@@ -167,9 +167,9 @@ Deno.serve(async (req) => {
       return response({ success: true, message: feeText + podText }, 200, headers);
     }
 
-    if (isQuestion(query, ["paystack", "payment", "pay online", "momo", "pay on delivery"])) {
+    if (isQuestion(query, ["moolre", "payment", "pay online", "momo", "pay on delivery"])) {
       const methods = [];
-      if (payOnline) methods.push("Pay Online with paystack");
+      if (payOnline) methods.push("Pay Online with Moolre Mobile Money");
       if (payOnDelivery) methods.push(podAccraOnly ? "Pay on Delivery within Greater Accra" : "Pay on Delivery");
       return response({
         success: true,

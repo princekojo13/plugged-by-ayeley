@@ -6,6 +6,12 @@ verify_jwt = false
 [functions.paystack-webhook]
 verify_jwt = false
 
+[functions.moolre-payment]
+verify_jwt = false
+
+[functions.moolre-webhook]
+verify_jwt = false
+
 [functions.store-assistant]
 verify_jwt = false
 

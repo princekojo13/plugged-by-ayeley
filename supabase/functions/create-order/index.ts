@@ -245,8 +245,8 @@ Deno.serve(async (req: Request) => {
     const paymentMethod = paymentInput === "pay_on_delivery" ||
         paymentInput === "cod" || paymentInput === "cash_on_delivery"
       ? "cash_on_delivery"
-      : paymentInput === "paystack" || paymentInput === "online"
-      ? "paystack"
+      : paymentInput === "moolre" || paymentInput === "online"
+      ? "moolre"
       : "";
     const momoNumber = text(body.momo_number, 254);
     const momoNetwork = text(body.momo_network, 20);
@@ -266,7 +266,7 @@ Deno.serve(async (req: Request) => {
     if (!paymentMethod) {
       return respond({ success: false, error: "Select a valid payment method." }, 400, headers);
     }
-    if (paymentMethod === "cash_on_delivery") {
+    if (paymentMethod === "cash_on_delivery" || paymentMethod === "moolre") {
       const momoDigits = momoNumber.replace(/\D/g, "");
       if (
         momoDigits.length < 9 ||
@@ -311,9 +311,11 @@ Deno.serve(async (req: Request) => {
       return respond({ success: false, error: "Checkout is temporarily unavailable." }, 503, headers);
     }
 
-    const paystackSecret = Deno.env.get("paystack_SECRET_KEY");
-    if (paymentMethod === "paystack" && !paystackSecret) {
-      return respond({ success: false, error: "Online payment is not configured yet." }, 503, headers);
+    const moolreUser = Deno.env.get("MOOLRE_API_USER");
+    const moolrePubkey = Deno.env.get("MOOLRE_API_PUBKEY");
+    const moolreAccount = Deno.env.get("MOOLRE_ACCOUNT_NUMBER");
+    if (paymentMethod === "moolre" && (!moolreUser || !moolrePubkey || !moolreAccount)) {
+      return respond({ success: false, error: "Moolre Mobile Money is not configured yet." }, 503, headers);
     }
 
     const db = createClient(supabaseUrl, serviceRoleKey, {
@@ -342,7 +344,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: settings, error: settingsError } = await db
       .from("store_settings")
-      .select("store_open,maintenance_mode,paystack_enabled,cod_enabled,cod_accra_only,cod_max_distance_km")
+      .select("store_open,maintenance_mode,moolre_enabled,cod_enabled,cod_accra_only,cod_max_distance_km")
       .eq("id", true)
       .maybeSingle();
     if (settingsError || !settings) {
@@ -352,7 +354,7 @@ Deno.serve(async (req: Request) => {
     if (!settings.store_open || settings.maintenance_mode) {
       return respond({ success: false, error: "The store is currently closed and cannot accept orders." }, 409, headers);
     }
-    if (paymentMethod === "paystack" && !settings.paystack_enabled) {
+    if (paymentMethod === "moolre" && !settings.moolre_enabled) {
       return respond({ success: false, error: "Online payment is currently unavailable." }, 409, headers);
     }
     if (paymentMethod === "cash_on_delivery" && !settings.cod_enabled) {
@@ -391,8 +393,8 @@ Deno.serve(async (req: Request) => {
       p_delivery_instructions: orderNote || null,
       p_delivery_region: region,
       p_notes: null,
-      p_momo_number: paymentMethod === "cash_on_delivery" ? momoNumber : null,
-      p_momo_network: paymentMethod === "cash_on_delivery" ? momoNetwork : null,
+      p_momo_number: paymentMethod === "cash_on_delivery" || paymentMethod === "moolre" ? momoNumber : null,
+      p_momo_network: paymentMethod === "cash_on_delivery" || paymentMethod === "moolre" ? momoNetwork : null,
     });
 
     if (createError) {
@@ -446,55 +448,58 @@ Deno.serve(async (req: Request) => {
       }, 200, headers);
     }
 
-    const reference = text(created.paystack_reference, 100);
-    const amountMinor = number(created.amount_minor);
-    const currency = text(created.currency, 3) || "GHS";
-    if (!reference || !Number.isSafeInteger(amountMinor) || amountMinor <= 0) {
-      console.error("create_order RPC returned invalid paystack details.");
-      return respond({ success: false, error: "Online payment could not be prepared." }, 500, headers);
+    if (paymentMethod === "moolre") {
+      const reference = text(created.moolre_reference, 100);
+      const channel = ({ MTN: "13", Telecel: "6", AirtelTigo: "7" } as Record<string, string>)[momoNetwork];
+      if (!reference || !channel) {
+        console.error("create_order RPC returned invalid Moolre details.");
+        return respond({ success: false, error: "Mobile Money payment could not be prepared." }, 500, headers);
+      }
+      const moolreBaseUrl = Deno.env.get("MOOLRE_BASE_URL")?.replace(/\/$/, "") || "https://api.moolre.com";
+      const payerDigits = momoNumber.replace(/\D/g, "");
+      const payer = payerDigits.startsWith("233") ? `0${payerDigits.slice(3)}` : payerDigits;
+      const payload: Record<string, unknown> = {
+        type: 1,
+        channel,
+        currency: text(created.currency, 3) || "GHS",
+        amount: String(number(created.total)),
+        payer,
+        externalref: reference,
+        accountnumber: moolreAccount,
+      };
+      if (Deno.env.get("MOOLRE_SKIP_OTP") === "true" && moolreBaseUrl.includes("sandbox")) payload.skipotp = true;
+      let gatewayResponse: Response;
+      let gatewayResult: Record<string, unknown>;
+      try {
+        gatewayResponse = await fetch(`${moolreBaseUrl}/open/transact/payment`, {
+          method: "POST",
+          headers: { "X-API-USER": moolreUser, "X-API-PUBKEY": moolrePubkey, "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(15_000),
+        });
+        gatewayResult = record(await gatewayResponse.json());
+      } catch (error) {
+        console.error("Moolre payment initialization failed:", error);
+        return respond({ success: false, error: "Mobile Money payment could not be started. Please contact the store before retrying." }, 502, headers);
+      }
+      const code = text(gatewayResult.code, 20);
+      const otpRequired = code === "TP14";
+      const initiated = gatewayResponse.ok && Number(gatewayResult.status) === 1 && (otpRequired || code === "TR099");
+      if (!initiated) {
+        console.error("Moolre rejected payment initialization:", gatewayResponse.status, code);
+        return respond({ success: false, error: "Moolre could not start the Mobile Money request. Please try again or contact the store." }, 502, headers);
+      }
+      const { data: savedOrder, error: orderError } = await db.from("orders")
+        .select("id,order_number,subtotal,delivery_fee,total,payment_method,payment_status,order_status,moolre_reference,momo_number,momo_network")
+        .eq("id", orderId).maybeSingle();
+      if (orderError || !savedOrder) {
+        console.error("Could not load the Moolre order:", orderError?.message);
+        return respond({ success: false, error: "The payment request started, but the order confirmation could not be loaded. Contact the store with reference " + reference }, 500, headers);
+      }
+      return respond({ success: true, payment_pending: true, otp_required: otpRequired, order: savedOrder }, 200, headers);
     }
 
-    const paymentPayload: Record<string, unknown> = {
-      email,
-      amount: String(amountMinor),
-      currency,
-      reference,
-      metadata: {
-        order_id: orderId,
-        order_number: orderNumber,
-      },
-    };
-
-    const callbackUrl = Deno.env.get("paystack_CALLBACK_URL")?.trim() ||
-      (origin && ALLOWED_ORIGINS.has(origin) ? `${origin}/payment-success` : "");
-    if (callbackUrl) paymentPayload.callback_url = callbackUrl;
-
-    let paystackResponse: Response;
-    let paystackResult: Record<string, unknown>;
-    try {
-      paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${paystackSecret}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(paymentPayload),
-        signal: AbortSignal.timeout(15_000),
-      });
-      paystackResult = record(await paystackResponse.json());
-    } catch (error) {
-      console.error("paystack initialization request failed:", error);
-      return respond({ success: false, error: "Online payment could not be started. Please contact the store before retrying." }, 502, headers);
-    }
-
-    const paystackData = record(paystackResult.data);
-    const paymentUrl = text(paystackData.authorization_url, 2000);
-    if (!paystackResponse.ok || paystackResult.status !== true || !paymentUrl) {
-      console.error("paystack rejected transaction initialization:", paystackResponse.status, paystackResult.message);
-      return respond({ success: false, error: "Online payment could not be started. Please contact the store before retrying." }, 502, headers);
-    }
-
-    return respond({ success: true, payment_url: paymentUrl, order_number: orderNumber }, 200, headers);
+    return respond({ success: false, error: "Invalid payment method." }, 400, headers);
   } catch (error) {
     console.error("create-order failed:", error);
     return respond({ success: false, error: "Checkout is temporarily unavailable." }, 500, headers);

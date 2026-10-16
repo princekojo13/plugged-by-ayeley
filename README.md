@@ -1,45 +1,33 @@
 # Plugged by Ayeley
 
-Plugged by Ayeley is a Ghanaian e-commerce store for authentic UK-sourced products, including snacks, toiletries, beauty products, hair care, supplements, perfumes, and personal-care products.
+Plugged by Ayeley is a Ghanaian e-commerce store for UK-sourced products, including snacks, toiletries, beauty products, hair care, supplements, perfumes, and personal-care products.
 
 The application is built with React, Vite, Tailwind CSS, and Supabase.
 
 ## Features
 
-- Responsive online store
-- Product browsing and search
-- Shopping cart
-- Guest checkout
-- paystack online payments
+- Responsive online store and product search
+- Shopping cart and guest checkout
+- Moolre Mobile Money payment requests
 - Pay on Delivery for eligible Greater Accra orders
-- Order tracking
-- Product reviews
-- Contact messages
-- Wholesale inquiries
-- Secure administrator dashboard
-- Product management
-- Order management
-- Review management
-- Message management
-- Store settings
-- Supabase Row Level Security
-- Secure Supabase Edge Functions
+- Google Maps delivery pin selection and order tracking
+- Product reviews and customer inquiries
+- Secure administrator dashboard for products, orders, and store settings
+- Supabase Row Level Security and Edge Functions
 
-## Technology
+## Local development
 
-- React
-- Vite
-- Tailwind CSS
-- React Router
-- Supabase
-- Supabase Auth
-- Supabase PostgreSQL
-- Supabase Edge Functions
-- paystack
+Install packages with `npm install`, then start the development server with `npm run dev`.
 
-## Local Development
+## Service configuration
 
-### 1. Install dependencies
+Add `VITE_GOOGLE_MAPS_API_KEY` to the Render environment and local `.env` file. In Google Cloud, enable the Maps JavaScript API and billing, then restrict the key to the live website referrers and local development origins. Until the key is set, checkout allows a Ghana coordinate pin to be entered manually.
 
-```bash
-npm install
+Configure these as Supabase Edge Function secrets before turning on Moolre in Store Settings:
+
+- `MOOLRE_API_USER`
+- `MOOLRE_API_PUBKEY`
+- `MOOLRE_ACCOUNT_NUMBER`
+- `MOOLRE_WEBHOOK_SECRET`
+
+`MOOLRE_BASE_URL` is optional and defaults to `https://api.moolre.com`. Point it at Moolre's sandbox only while testing. Set the Moolre payment callback URL to `https://mndwsmvfcjjrqpanzdkn.supabase.co/functions/v1/moolre-webhook`. Keep Moolre credentials in Supabase secrets; do not add them to this repository or the browser environment.

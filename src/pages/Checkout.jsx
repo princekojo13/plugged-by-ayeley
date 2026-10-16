@@ -13,10 +13,10 @@ import {
 import { useCart } from "@/lib/cartContext";
 import { supabase } from "@/lib/supabaseClient";
 import { SITE_CONFIG } from "@/lib/siteConfig";
-import LeafletPinPicker from "@/components/LeafletPinPicker";
+import GooglePinPicker from "@/components/GooglePinPicker";
 
 const PAYMENT_METHODS = {
-  paystack: "paystack",
+  moolre: "moolre",
   POD: "pay_on_delivery",
 };
 
@@ -111,14 +111,17 @@ export default function Checkout() {
   const [deliveryQuoteError, setDeliveryQuoteError] = useState("");
 
   const [paymentMethod, setPaymentMethod] = useState(
-    PAYMENT_METHODS.paystack
+    PAYMENT_METHODS.moolre
   );
+  const [moolreOtpRequired, setMoolreOtpRequired] = useState(false);
+  const [moolrePaymentPhone, setMoolrePaymentPhone] = useState("");
+  const [moolreOtp, setMoolreOtp] = useState("");
 
   useEffect(() => {
     let active = true;
     supabase
       .from("store_settings")
-      .select("store_open,maintenance_mode,paystack_enabled,cod_enabled,cod_accra_only")
+      .select("store_open,maintenance_mode,moolre_enabled,cod_enabled,cod_accra_only")
       .eq("id", true)
       .maybeSingle()
       .then(({ data, error: loadError }) => {
@@ -128,10 +131,10 @@ export default function Checkout() {
           return;
         }
         setStoreSettings(data);
-        if (!data.paystack_enabled && data.cod_enabled) {
+        if (!data.moolre_enabled && data.cod_enabled) {
           setPaymentMethod(PAYMENT_METHODS.POD);
-        } else if (data.paystack_enabled) {
-          setPaymentMethod(PAYMENT_METHODS.paystack);
+        } else if (data.moolre_enabled) {
+          setPaymentMethod(PAYMENT_METHODS.moolre);
         }
       });
     return () => { active = false; };
@@ -164,7 +167,7 @@ export default function Checkout() {
   };
 
   const handlePaymentChange = (method) => {
-    if (method === PAYMENT_METHODS.paystack && !storeSettings?.paystack_enabled) return;
+    if (method === PAYMENT_METHODS.moolre && !storeSettings?.moolre_enabled) return;
     if (method === PAYMENT_METHODS.POD && (!storeSettings?.cod_enabled || !codRegionAllowed)) return;
 
     setPaymentMethod(method);
@@ -178,7 +181,7 @@ export default function Checkout() {
     }));
 
     if (value !== "Greater Accra" && storeSettings?.cod_accra_only) {
-      setPaymentMethod(PAYMENT_METHODS.paystack);
+      setPaymentMethod(PAYMENT_METHODS.moolre);
     }
 
     setError("");
@@ -300,14 +303,14 @@ export default function Checkout() {
       );
     }
 
-    if (paymentMethod === PAYMENT_METHODS.paystack && !storeSettings?.paystack_enabled) {
+    if (paymentMethod === PAYMENT_METHODS.moolre && !storeSettings?.moolre_enabled) {
       return "Online payment is currently unavailable.";
     }
     if (paymentMethod === PAYMENT_METHODS.POD && !storeSettings?.cod_enabled) {
       return "Pay on Delivery is currently unavailable.";
     }
 
-    if (paymentMethod === PAYMENT_METHODS.POD) {
+    if (paymentMethod === PAYMENT_METHODS.POD || paymentMethod === PAYMENT_METHODS.moolre) {
       const momoDigits = form.momo_number.replace(/\D/g, "");
       if (
         momoDigits.length < 9 ||
@@ -319,11 +322,7 @@ export default function Checkout() {
       }
     }
 
-    if (
-      paymentMethod ===
-        PAYMENT_METHODS.POD &&
-      form.momo_network.trim().length < 2
-    ) {
+    if ((paymentMethod === PAYMENT_METHODS.POD || paymentMethod === PAYMENT_METHODS.moolre) && form.momo_network.trim().length < 2) {
       return "Please select your Mobile Money network.";
     }
 
@@ -432,14 +431,12 @@ export default function Checkout() {
               delivery_lng: deliveryLocation.lng,
 
               momo_number:
-                paymentMethod ===
-                PAYMENT_METHODS.POD
+                paymentMethod === PAYMENT_METHODS.POD || paymentMethod === PAYMENT_METHODS.moolre
                   ? form.momo_number.trim()
                   : null,
 
               momo_network:
-                paymentMethod ===
-                PAYMENT_METHODS.POD
+                paymentMethod === PAYMENT_METHODS.POD || paymentMethod === PAYMENT_METHODS.moolre
                   ? form.momo_network
                   : null,
 
@@ -470,21 +467,17 @@ export default function Checkout() {
         );
       }
 
-      /*
-       * paystack
-       *
-       * The Edge Function should return the
-       * paystack authorization URL only after
-       * securely creating the pending order.
-       */
       if (
-        paymentMethod ===
-          PAYMENT_METHODS.paystack &&
-        data.payment_url
+        paymentMethod === PAYMENT_METHODS.moolre && data.payment_pending && data.order
       ) {
-        window.location.href =
-          data.payment_url;
-
+        localStorage.setItem("pba_last_order_number", data.order.order_number);
+        if (form.email.trim()) localStorage.setItem("pba_myemail", form.email.trim());
+        localStorage.setItem("pba_has_purchased", "true");
+        clearCart();
+        setPlacedOrder({ ...data.order, full_name: form.full_name.trim(), phone: form.phone.trim() });
+        setMoolreOtpRequired(Boolean(data.otp_required));
+        setMoolrePaymentPhone(form.momo_number.trim());
+        window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
 
@@ -543,12 +536,33 @@ export default function Checkout() {
     }
   };
 
+  const submitMoolreOtp = async () => {
+    const { data, error: invokeError } = await supabase.functions.invoke("moolre-payment", {
+      body: { action: "otp", order_number: placedOrder.order_number, phone: moolrePaymentPhone, otpcode: moolreOtp.trim() },
+    });
+    if (invokeError || !data?.success) throw new Error(data?.error || invokeError?.message || "The Mobile Money verification could not be submitted.");
+    setMoolreOtpRequired(Boolean(data.otp_required));
+    setMoolreOtp("");
+    return data;
+  };
+
+  const checkMoolrePayment = async () => {
+    const { data, error: invokeError } = await supabase.functions.invoke("moolre-payment", {
+      body: { action: "status", order_number: placedOrder.order_number, phone: moolrePaymentPhone },
+    });
+    if (invokeError || !data?.success) throw new Error(data?.error || invokeError?.message || "Payment status could not be checked.");
+    if (data.payment_status) setPlacedOrder((current) => ({ ...current, payment_status: data.payment_status }));
+    return data;
+  };
+
   if (placedOrder) {
     const paymentLabel =
       placedOrder.payment_method ===
       PAYMENT_METHODS.POD
         ? "Pay on Delivery"
-        : "Pay Online";
+        : placedOrder.payment_method === PAYMENT_METHODS.moolre
+          ? (placedOrder.payment_status === "paid" ? "Mobile Money paid" : "Mobile Money pending")
+          : "Pay Online";
 
     return (
       <div className="max-w-2xl mx-auto px-4 py-16">
@@ -564,6 +578,15 @@ export default function Checkout() {
           <p className="mt-3 text-muted-foreground">
             Thank you, {placedOrder.full_name}.
           </p>
+
+          {placedOrder.payment_method === PAYMENT_METHODS.moolre && (
+            <div className="mt-5 border border-blue-200 bg-blue-50 p-4 text-left text-sm text-blue-950">
+              {placedOrder.payment_status === "paid" ? "Moolre confirmed your payment." : "A Mobile Money request has been sent. Approve it on your phone, then check the payment status here."}
+              {moolreOtpRequired && <div className="mt-3 flex gap-2"><input aria-label="Mobile Money verification code" inputMode="numeric" autoComplete="one-time-code" maxLength={12} className="min-w-0 flex-1 rounded border border-blue-200 px-3 py-2" placeholder="SMS verification code" value={moolreOtp} onChange={(event) => setMoolreOtp(event.target.value)} /><button type="button" disabled={!moolreOtp.trim()} onClick={() => submitMoolreOtp().catch((error) => setError(error.message))} className="rounded bg-carbon px-4 py-2 font-bold text-white disabled:opacity-50">Verify</button></div>}
+              {!moolreOtpRequired && placedOrder.payment_status !== "paid" && <button type="button" onClick={() => checkMoolrePayment().catch((error) => setError(error.message))} className="mt-3 rounded bg-carbon px-4 py-2 font-bold text-white">Check payment status</button>}
+              {error && <p role="alert" className="mt-3 text-red-700">{error}</p>}
+            </div>
+          )}
 
           <div className="mt-8 border border-border bg-london/40 p-6 text-left space-y-4">
             <div className="flex justify-between gap-4">
@@ -820,7 +843,7 @@ export default function Checkout() {
                     Click or tap the map to place a pin, then drag it to your delivery point. The location is used to calculate delivery distance.
                   </p>
                   <div className="overflow-hidden border border-border">
-                    <LeafletPinPicker
+                    <GooglePinPicker
                       location={deliveryLocation}
                       onSelect={setDeliveryLocation}
                     />
@@ -901,17 +924,17 @@ export default function Checkout() {
             {!storeSettings && !settingsError && <p className="mb-4 text-sm text-muted-foreground">Loading checkout options…</p>}
 
             <div className="space-y-4">
-              {storeSettings?.paystack_enabled && <button
+              {storeSettings?.moolre_enabled && <button
                 type="button"
                 onClick={() =>
                   handlePaymentChange(
-                    PAYMENT_METHODS.paystack
+                    PAYMENT_METHODS.moolre
                   )
                 }
                 disabled={submitting}
                 className={`w-full text-left border-2 p-5 transition-colors ${
                   paymentMethod ===
-                  PAYMENT_METHODS.paystack
+                  PAYMENT_METHODS.moolre
                     ? "border-pink bg-pink/5"
                     : "border-border hover:border-pink/50"
                 } disabled:opacity-60`}
@@ -920,13 +943,13 @@ export default function Checkout() {
                   <div
                     className={`w-5 h-5 rounded-full border-2 mt-0.5 flex items-center justify-center ${
                       paymentMethod ===
-                      PAYMENT_METHODS.paystack
+                      PAYMENT_METHODS.moolre
                         ? "border-pink"
                         : "border-gray-300"
                     }`}
                   >
                     {paymentMethod ===
-                      PAYMENT_METHODS.paystack && (
+                      PAYMENT_METHODS.moolre && (
                       <div className="w-2.5 h-2.5 rounded-full bg-pink" />
                     )}
                   </div>
@@ -939,7 +962,7 @@ export default function Checkout() {
                     </p>
 
                     <p className="text-sm text-muted-foreground mt-1">
-                      Pay securely online through paystack.
+                      Pay with Mobile Money through Moolre. Approve the prompt on your phone.
                     </p>
                   </div>
                 </div>
@@ -999,15 +1022,14 @@ export default function Checkout() {
                   </div>
                 </div>
               </button>}
-              {storeSettings && !storeSettings.paystack_enabled && !storeSettings.cod_enabled && (
+              {storeSettings && !storeSettings.moolre_enabled && !storeSettings.cod_enabled && (
                 <p role="alert" className="border border-red-200 bg-red-50 p-4 text-sm text-red-700">Orders are temporarily unavailable because no payment methods are enabled.</p>
               )}
             </div>
 
-            {paymentMethod ===
-              PAYMENT_METHODS.POD &&
-              codRegionAllowed && (
+            {(paymentMethod === PAYMENT_METHODS.moolre || paymentMethod === PAYMENT_METHODS.POD && codRegionAllowed) && (
                 <div className="mt-5 grid sm:grid-cols-2 gap-4">
+                  {paymentMethod === PAYMENT_METHODS.moolre && <p className="sm:col-span-2 text-sm text-muted-foreground">Enter the Mobile Money number to charge. Approve the payment request on your phone after placing the order.</p>}
                   <Field
                     label="MoMo Number"
                     id="checkout-momo-number"
@@ -1175,7 +1197,7 @@ export default function Checkout() {
 
             <button
               type="submit"
-              disabled={submitting || Boolean(checkoutValidationError) || deliveryQuoteLoading || !deliveryQuote || !storeSettings || Boolean(settingsError) || storeClosed || (!storeSettings?.paystack_enabled && !storeSettings?.cod_enabled)}
+              disabled={submitting || Boolean(checkoutValidationError) || deliveryQuoteLoading || !deliveryQuote || !storeSettings || Boolean(settingsError) || storeClosed || (!storeSettings?.moolre_enabled && !storeSettings?.cod_enabled)}
               className="w-full mt-6 py-4 bg-pink text-white font-bold uppercase tracking-wider text-sm hover:bg-carbon transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {submitting ? (
@@ -1184,10 +1206,10 @@ export default function Checkout() {
                   Processing...
                 </>
               ) : paymentMethod ===
-                PAYMENT_METHODS.paystack ? (
+                PAYMENT_METHODS.moolre ? (
                 <>
                   <CreditCard className="w-4 h-4" />
-                  Continue to paystack
+                  Request Mobile Money payment
                 </>
               ) : (
                 <>
