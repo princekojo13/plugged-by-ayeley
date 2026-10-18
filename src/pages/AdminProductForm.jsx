@@ -5,12 +5,10 @@ import {
   Image as ImageIcon,
   Loader2,
   Save,
-  Sparkles,
   Trash2,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { CATEGORIES } from "@/lib/siteConfig";
-import ProductPhotoStudio from "@/components/admin/ProductPhotoStudio";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import { toast } from "@/components/ui/use-toast";
 
@@ -88,34 +86,6 @@ export default function AdminProductForm() {
   const [imageMode, setImageMode] = useState("url");
   const [selectedImageFile, setSelectedImageFile] = useState(null);
   const [selectedImagePreview, setSelectedImagePreview] = useState("");
-  const [photoStudioOpen, setPhotoStudioOpen] = useState(false);
-  const [photoStudioMessage, setPhotoStudioMessage] = useState("");
-  const [pendingAdditionalImageFiles, setPendingAdditionalImageFiles] = useState([]);
-
-  const photoSources = useMemo(() => {
-    const sources = [];
-    const mainUrl = selectedImageFile ? selectedImagePreview : form.image.trim();
-    if (mainUrl) {
-      sources.push({
-        id: "main",
-        label: selectedImageFile ? "Selected main photo" : "Main product image",
-        url: mainUrl,
-        file: selectedImageFile || undefined,
-      });
-    }
-
-    form.additional_images
-      .split(/[\n,]+/)
-      .map((url) => url.trim())
-      .filter(Boolean)
-      .forEach((url, index) => sources.push({
-        id: `additional-${index}`,
-        label: `Gallery image ${index + 1}`,
-        url,
-      }));
-
-    return sources;
-  }, [form.additional_images, form.image, selectedImageFile, selectedImagePreview]);
 
   useEffect(() => {
     if (!selectedImagePreview) return undefined;
@@ -326,27 +296,6 @@ export default function AdminProductForm() {
         image = publicUrl;
       }
 
-      for (const additionalFile of pendingAdditionalImageFiles) {
-        const imagePath = `products/${crypto.randomUUID()}.${PRODUCT_IMAGE_EXTENSIONS[additionalFile.type]}`;
-        setUploadingImage(true);
-        const uploadResult = await supabase.storage
-          .from(PRODUCT_IMAGE_BUCKET)
-          .upload(imagePath, additionalFile, {
-            cacheControl: "3600",
-            contentType: additionalFile.type,
-            upsert: false,
-          });
-        if (uploadResult.error) {
-          throw new Error(uploadResult.error.message || "An edited gallery photo could not be uploaded.");
-        }
-
-        const uploadedPath = uploadResult.data.path || imagePath;
-        uploadedImagePaths.push(uploadedPath);
-        const publicUrl = supabase.storage.from(PRODUCT_IMAGE_BUCKET).getPublicUrl(uploadedPath).data.publicUrl;
-        if (!publicUrl) throw new Error("An edited gallery photo URL could not be created.");
-        additionalImages.push(publicUrl);
-      }
-
       const payload = {
         name,
         slug,
@@ -425,49 +374,6 @@ export default function AdminProductForm() {
       setSaving(false);
       setUploadingImage(false);
     }
-  };
-
-  const handlePhotoStudioSaved = ({ url, target }) => {
-    toast({
-      variant: "success",
-      title: "Product photo saved",
-      description: target === "main" ? "The main product photo has been updated." : "The photo was added to the product gallery.",
-    });
-    if (target === "main") {
-      setForm((current) => ({ ...current, image: url }));
-      setSelectedImageFile(null);
-      setSelectedImagePreview("");
-      setImageMode("url");
-      setPhotoStudioMessage("The edited main product photo has been saved.");
-      return;
-    }
-
-    setForm((current) => {
-      const currentImages = current.additional_images
-        .split(/[\n,]+/)
-        .map((image) => image.trim())
-        .filter(Boolean);
-      return {
-        ...current,
-        additional_images: [...currentImages, url].join("\n"),
-      };
-    });
-    setPhotoStudioMessage("The edited photo has been added to the product gallery.");
-  };
-
-  const handlePhotoStudioApplied = ({ file, target }) => {
-    setError("");
-    if (target === "main") {
-      setSelectedImageFile(file);
-      setSelectedImagePreview(URL.createObjectURL(file));
-      setImageMode("gallery");
-      setForm((current) => ({ ...current, image: "" }));
-      setPhotoStudioMessage("Studio photo ready as the main image. Save the product to finish.");
-      return;
-    }
-
-    setPendingAdditionalImageFiles((current) => [...current, file]);
-    setPhotoStudioMessage("Studio photo added to the pending gallery images. Save the product to finish.");
   };
 
   const handleDelete = async () => {
@@ -708,21 +614,6 @@ export default function AdminProductForm() {
             </div>
 
             <div className="mt-6">
-              <div className="mb-5 flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPhotoStudioMessage("");
-                    setPhotoStudioOpen(true);
-                  }}
-                  disabled={saving || uploadingImage}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#171615] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#ff1f8f] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Sparkles className="h-4 w-4" /> Edit Product Photo
-                </button>
-                {photoStudioMessage && <p role="status" className="text-sm text-emerald-700">{photoStudioMessage}</p>}
-              </div>
-
               <div
                 role="group"
                 aria-label="Product image source"
@@ -773,7 +664,6 @@ export default function AdminProductForm() {
                 </div>
               ) : (
                 <div className="relative mt-5">
-                  <ImageIcon className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-black/25" />
                   <input
                     type="url"
                     value={form.image}
@@ -807,11 +697,6 @@ export default function AdminProductForm() {
               <div className="mt-5 grid gap-5 md:grid-cols-2">
                 <Field label="Additional image URLs" hint="Add one URL per line, or separate URLs with commas.">
                   <textarea value={form.additional_images} onChange={(event) => updateField("additional_images", event.target.value)} className="admin-input min-h-24 resize-y" placeholder="https://example.com/second-image.jpg" />
-                  {pendingAdditionalImageFiles.length > 0 && (
-                    <p role="status" className="mt-2 text-xs font-medium text-emerald-700">
-                      {pendingAdditionalImageFiles.length} studio {pendingAdditionalImageFiles.length === 1 ? "image" : "images"} will be added when you save this product.
-                    </p>
-                  )}
                 </Field>
                 <Field label="Country or origin label" hint="Optional label such as UK-sourced.">
                   <input value={form.uk_origin} onChange={(event) => updateField("uk_origin", event.target.value)} className="admin-input" maxLength={100} placeholder="UK-sourced" />
@@ -922,17 +807,6 @@ export default function AdminProductForm() {
               marked as visible.
             </p>
           </div>
-          {photoStudioOpen && (
-            <ProductPhotoStudio
-              sources={photoSources}
-              initialSourceId={photoSources[0]?.id || ""}
-              productId={editing ? id : null}
-              productName={form.name}
-              onClose={() => setPhotoStudioOpen(false)}
-              onImageSaved={handlePhotoStudioSaved}
-              onUseInForm={handlePhotoStudioApplied}
-            />
-          )}
         </form>
       </main>
     </div>
