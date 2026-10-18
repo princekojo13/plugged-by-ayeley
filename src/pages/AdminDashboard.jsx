@@ -165,19 +165,23 @@ export default function AdminDashboard() {
     return () => eventNames.forEach((eventName) => window.removeEventListener(eventName, refreshDashboard));
   }, [loadDashboard]);
 
-  const enableBrowserNotifications = async () => {
-    if (!("Notification" in window)) return;
-    const permission = await window.Notification.requestPermission();
-    setNotificationPermission(permission);
-  };
-
-  const toggleNotifications = () => {
+  const toggleNotifications = async () => {
     const enabled = !notificationsEnabled;
     setNotificationsEnabled(enabled);
     try {
       window.localStorage.setItem("admin-notifications-enabled", String(enabled));
     } catch {
       // Keep the current-session toggle working if browser storage is unavailable.
+    }
+
+    // Ask for desktop permission from this user gesture, while keeping the
+    // in-app alert toggle useful if permission is denied or unavailable.
+    if (enabled && "Notification" in window && window.Notification.permission === "default") {
+      try {
+        setNotificationPermission(await window.Notification.requestPermission());
+      } catch {
+        setNotificationPermission(window.Notification.permission);
+      }
     }
   };
 
@@ -241,23 +245,15 @@ export default function AdminDashboard() {
                     ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-300"
                     : "border-black/10 bg-white text-black/60 hover:border-[#ff1f8f] hover:text-[#ff1f8f]"
                 }`}
-                title={notificationsEnabled ? "Turn off in-app and browser alerts" : "Turn on in-app and browser alerts"}
+                title={notificationsEnabled
+                  ? "Turn off order, stock, and review alerts"
+                  : notificationPermission === "denied"
+                    ? "Turn on in-app alerts; browser alerts are blocked in your browser settings"
+                    : "Turn on order, stock, and review alerts"}
               >
                 {notificationsEnabled ? <BellRing className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
-                Alerts {notificationsEnabled ? "on" : "off"}
+                Notifications {notificationsEnabled ? "on" : "off"}
               </button>
-              {"Notification" in window && (
-                <button
-                  type="button"
-                  onClick={() => void enableBrowserNotifications()}
-                  disabled={notificationPermission === "granted"}
-                  className="inline-flex items-center gap-2 rounded-xl border border-black/10 bg-white px-4 py-2.5 text-sm font-semibold transition hover:border-[#ff1f8f] hover:text-[#ff1f8f] disabled:cursor-default disabled:text-emerald-700"
-                  title={notificationPermission === "granted" ? "Browser alerts are enabled" : "Allow order, stock, and review alerts"}
-                >
-                  <BellRing className="h-4 w-4" />
-                  {notificationPermission === "granted" ? "Alerts on" : "Enable alerts"}
-                </button>
-              )}
               <button
                 type="button"
                 onClick={() => void logout()}
