@@ -1,3 +1,4 @@
+-- Moolre checkout schema and secure payment confirmation setup.
 alter table public.store_settings
   add column if not exists moolre_enabled boolean not null default false;
 

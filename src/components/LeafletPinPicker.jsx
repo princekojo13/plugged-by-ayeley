@@ -183,7 +183,7 @@ export default function LeafletPinPicker({ location, onSelect }) {
             placeholder="Search town, area or landmark"
             maxLength={120}
             autoComplete="street-address"
-            className="ck-input pl-9"
+            className="ck-input pl-12"
           />
         </div>
         <button type="button" onClick={() => void searchLocation()} disabled={searching || query.trim().length < 3} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md bg-pink px-3 text-sm font-semibold text-white transition hover:bg-carbon disabled:cursor-not-allowed disabled:opacity-50">

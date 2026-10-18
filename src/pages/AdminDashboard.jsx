@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import {
   ArrowUpRight,
   BarChart3,
+  BellRing,
   Clock3,
   CreditCard,
   LogOut,
@@ -73,6 +74,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState("default");
 
   const loadDashboard = useCallback(
     async (manual = false) => {
@@ -149,10 +151,18 @@ export default function AdminDashboard() {
   }, [loadDashboard]);
 
   useEffect(() => {
-    const refreshForNewOrder = () => void loadDashboard(true);
-    window.addEventListener("admin:order-inserted", refreshForNewOrder);
-    return () => window.removeEventListener("admin:order-inserted", refreshForNewOrder);
+    if ("Notification" in window) setNotificationPermission(window.Notification.permission);
+    const refreshDashboard = () => void loadDashboard(true);
+    const eventNames = ["admin:order-inserted", "admin:product-updated", "admin:review-inserted"];
+    eventNames.forEach((eventName) => window.addEventListener(eventName, refreshDashboard));
+    return () => eventNames.forEach((eventName) => window.removeEventListener(eventName, refreshDashboard));
   }, [loadDashboard]);
+
+  const enableBrowserNotifications = async () => {
+    if (!("Notification" in window)) return;
+    const permission = await window.Notification.requestPermission();
+    setNotificationPermission(permission);
+  };
 
   const paidValue = orders
     .filter((order) => order.payment_status === "paid")
@@ -205,6 +215,18 @@ export default function AdminDashboard() {
             </div>
 
             <div className="flex items-center gap-2">
+              {"Notification" in window && (
+                <button
+                  type="button"
+                  onClick={() => void enableBrowserNotifications()}
+                  disabled={notificationPermission === "granted"}
+                  className="inline-flex items-center gap-2 rounded-xl border border-black/10 bg-white px-4 py-2.5 text-sm font-semibold transition hover:border-[#ff1f8f] hover:text-[#ff1f8f] disabled:cursor-default disabled:text-emerald-700"
+                  title={notificationPermission === "granted" ? "Browser alerts are enabled" : "Allow order, stock, and review alerts"}
+                >
+                  <BellRing className="h-4 w-4" />
+                  {notificationPermission === "granted" ? "Alerts on" : "Enable alerts"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => void logout()}
