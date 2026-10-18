@@ -1,17 +1,19 @@
 import React, { useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { Minus, Plus, ShoppingBag, ArrowLeft, ShieldCheck, Truck, Check, ChevronRight } from "lucide-react";
+import { Minus, Plus, ShoppingBag, MessageCircle, ArrowLeft, ShieldCheck, Truck, Check, ChevronRight } from "lucide-react";
 import { Image } from "@/components/ui/image";
 import { useProduct, useProducts } from "@/lib/useProducts";
-import { useCart, PREORDER_MAX } from "@/lib/cartContext";
+import { useCart } from "@/lib/cartContext";
 import ProductCard from "@/components/ProductCard";
 import ReviewSection from "@/components/ReviewSection";
 import { cn } from "@/lib/utils";
+import { useStoreSettings, whatsappLink } from "@/lib/useStoreSettings";
 
 export default function ProductDetail() {
   const { id } = useParams();
   const { product, loading: isLoading } = useProduct(id);
   const { addToCart } = useCart();
+  const { whatsapp } = useStoreSettings();
   const navigate = useNavigate();
   const [quantity, setQuantity] = useState(1);
   const [activeImage, setActiveImage] = useState(0);
@@ -48,16 +50,15 @@ export default function ProductDetail() {
   const onSale = Number.isFinite(compareAtPrice) && compareAtPrice > effectivePrice;
   const inStock = product.stock > 0;
   const images = product.images?.length ? product.images : [];
+  const interestLink = whatsappLink(
+    whatsapp,
+    `Hi, I’m interested in ${product.name}. Please let me know when it is back in stock.`
+  );
 
   const handleAddToCart = () => {
     addToCart(product, quantity);
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
-  };
-
-  const handleBuyNow = () => {
-    addToCart(product, quantity);
-    navigate("/checkout");
   };
 
   const relatedProducts = (related || []).filter((p) => p.id !== product.id).slice(0, 4);
@@ -142,7 +143,7 @@ export default function ProductDetail() {
               ) : (
                 <>
                   <span className="w-2 h-2 rounded-full bg-pink" />
-                  <span className="text-sm font-medium text-pink">Pre-order · Ships from UK in 10–21 days</span>
+                  <span className="text-sm font-medium text-muted-foreground">Out of stock</span>
                 </>
               )}
             </div>
@@ -158,8 +159,8 @@ export default function ProductDetail() {
               <p className="text-xs text-muted-foreground mb-6">SKU: {product.sku}</p>
             )}
 
-            {/* Quantity + Add to cart */}
-            <div className="flex flex-col sm:flex-row gap-3 mb-4">
+            {/* Purchase or availability request */}
+            {inStock ? <div className="flex flex-col sm:flex-row gap-3 mb-4">
               <div className="flex items-center border border-border">
                 <button
                   onClick={() => setQuantity((q) => Math.max(1, q - 1))}
@@ -170,7 +171,7 @@ export default function ProductDetail() {
                 </button>
                 <span className="w-12 text-center font-semibold">{quantity}</span>
                 <button
-                  onClick={() => setQuantity((q) => Math.min(inStock ? product.stock : PREORDER_MAX, q + 1))}
+                  onClick={() => setQuantity((q) => Math.min(product.stock, q + 1))}
                   className="w-12 h-12 flex items-center justify-center hover:bg-london transition-colors"
                   aria-label="Increase quantity"
                 >
@@ -184,16 +185,9 @@ export default function ProductDetail() {
                   added ? "bg-green-600 text-white" : "bg-carbon text-white hover:bg-pink"
                 )}
               >
-                {added ? <><Check className="w-4 h-4" /> Added to Cart</> : <><ShoppingBag className="w-4 h-4" /> {inStock ? "Add to Cart" : "Pre-order"}</>}
+                {added ? <><Check className="w-4 h-4" /> Added to Cart</> : <><ShoppingBag className="w-4 h-4" /> Add to Cart</>}
               </button>
-            </div>
-
-            <button
-              onClick={handleBuyNow}
-              className="w-full h-12 flex items-center justify-center gap-2 border border-carbon font-bold uppercase tracking-wider text-sm hover:bg-carbon hover:text-white transition-colors mb-6"
-            >
-              {inStock ? "Buy Now" : "Pre-order Now"}
-            </button>
+            </div> : <a href={interestLink} target="_blank" rel="noopener noreferrer" className="w-full h-12 flex items-center justify-center gap-2 bg-pink text-white font-bold uppercase tracking-wider text-sm hover:bg-carbon transition-colors mb-6"><MessageCircle className="w-4 h-4" /> I’m Interested — Ask When Available</a>}
 
             {/* Trust badges */}
             <div className="grid grid-cols-2 gap-3 pt-6 border-t border-border">

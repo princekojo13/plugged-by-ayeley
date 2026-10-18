@@ -4,7 +4,6 @@ import {
   CreditCard,
   MapPin,
   PackageCheck,
-  Plane,
   ShoppingBag,
   Smartphone,
   Truck,
@@ -147,9 +146,9 @@ export default function Delivery() {
         </div>
       </section>
 
-      {/* Payment + UK orders */}
+      {/* Payment options */}
       <section className="py-16 sm:py-20">
-        <div className="mx-auto grid max-w-7xl gap-6 px-4 sm:px-6 md:grid-cols-3 lg:px-8">
+        <div className="mx-auto grid max-w-4xl gap-6 px-4 sm:px-6 md:grid-cols-2 lg:px-8">
           <div className="border border-border p-6">
             <CreditCard className="mb-4 h-6 w-6 text-pink" />
 
@@ -173,19 +172,6 @@ export default function Delivery() {
             <p className="text-sm text-muted-foreground">
               Available for Greater Accra orders only. Pay with Mobile
               Money when your order arrives.
-            </p>
-          </div>
-
-          <div className="border border-border p-6">
-            <Plane className="mb-4 h-6 w-6 text-pink" />
-
-            <h3 className="mb-2 font-heading font-semibold text-carbon">
-              Pre-orders from the UK
-            </h3>
-
-            <p className="text-sm text-muted-foreground">
-              Items marked "Ships from UK" are sourced to order and take
-              10–21 days to arrive.
             </p>
           </div>
         </div>

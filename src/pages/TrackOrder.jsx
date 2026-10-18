@@ -32,15 +32,6 @@ const STATUS_STEP_INDEX = {
   out_for_delivery: 4,
   delivered: 5,
 };
-const PREORDER_STEPS = [
-  { key: "pending", label: "Pre-order received", icon: Clock },
-  { key: "confirmed", label: "Confirmed by store", icon: Check },
-  { key: "sourcing", label: "Sourcing from the UK", icon: Package },
-  { key: "shipped", label: "Shipped to Ghana", icon: Truck },
-  { key: "received", label: "Arrived in Ghana", icon: Package },
-  { key: "delivered", label: "Delivered", icon: Check },
-];
-const PREORDER_STEP_INDEX = Object.fromEntries(PREORDER_STEPS.map((step, index) => [step.key, index]));
 
 function formatDate(value) {
   if (!value) return "";
@@ -59,7 +50,6 @@ export default function TrackOrder() {
     () => orderParam
   );
   const [order, setOrder] = useState(null);
-  const [trackingView, setTrackingView] = useState("delivery");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -111,7 +101,6 @@ export default function TrackOrder() {
         ...data.order,
         status: data.order.order_status || data.order.status,
       });
-      setTrackingView(data.order.preorder_items?.length ? "preorder" : "delivery");
     } catch (err) {
       console.error("Order tracking error:", err);
       setError(err?.message || "We couldn't find an order with that PBA order number.");
@@ -196,12 +185,6 @@ export default function TrackOrder() {
 
         {order && (
           <div className="space-y-6">
-            {order.preorder_items?.length > 0 && (
-              <div className="grid grid-cols-2 rounded-lg border border-border bg-london/40 p-1" role="tablist" aria-label="Choose tracking type">
-                <button type="button" role="tab" aria-selected={trackingView === "delivery"} onClick={() => setTrackingView("delivery")} className={cn("rounded-md px-3 py-2.5 text-sm font-semibold transition-colors", trackingView === "delivery" ? "bg-white text-carbon shadow-sm" : "text-muted-foreground hover:text-carbon")}>In-stock order</button>
-                <button type="button" role="tab" aria-selected={trackingView === "preorder"} onClick={() => setTrackingView("preorder")} className={cn("rounded-md px-3 py-2.5 text-sm font-semibold transition-colors", trackingView === "preorder" ? "bg-white text-carbon shadow-sm" : "text-muted-foreground hover:text-carbon")}>Pre-order tracking <span className="ml-1 rounded-full bg-pink/10 px-1.5 py-0.5 text-xs text-pink">{order.preorder_items.length}</span></button>
-              </div>
-            )}
             <div className="bg-london/50 border border-border p-6">
               <div className="flex items-center justify-between gap-4 mb-6">
                 <div>
@@ -216,47 +199,7 @@ export default function TrackOrder() {
 
               </div>
 
-              {trackingView === "preorder" ? (
-                <div className="space-y-6">
-                  <p className="text-sm leading-6 text-muted-foreground">Pre-orders have their own progress updates. In-stock products from this checkout are tracked separately.</p>
-                  {order.preorder_items.map((item) => {
-                    const itemStatus = item.status || "pending";
-                    const itemCancelled = itemStatus === "cancelled";
-                    const itemStepIndex = PREORDER_STEP_INDEX[itemStatus] ?? -1;
-                    return (
-                      <section key={item.id} className="rounded-lg border border-border bg-white p-4 sm:p-5">
-                        <div className="mb-5 flex items-start justify-between gap-3">
-                          <div>
-                            <h2 className="font-semibold text-carbon">{item.name}</h2>
-                            <p className="mt-1 text-xs text-muted-foreground">Quantity: {item.quantity}</p>
-                          </div>
-                          <span className="shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">Pre-order</span>
-                        </div>
-                        {itemCancelled ? (
-                          <div className="flex items-center gap-3 py-2 text-red-600"><X className="h-5 w-5" /><span className="font-semibold">This pre-order was cancelled.</span></div>
-                        ) : (
-                          <div>
-                            {PREORDER_STEPS.map((step, index) => {
-                              const isComplete = itemStepIndex >= 0 && index <= itemStepIndex;
-                              const isCurrent = index === itemStepIndex;
-                              const StepIcon = step.icon;
-                              return (
-                                <div key={step.key} className="flex items-start gap-3 pb-5 last:pb-0">
-                                  <div className="flex flex-col items-center">
-                                    <div className={cn("flex h-8 w-8 items-center justify-center rounded-full border-2", isComplete ? "border-pink bg-pink text-white" : "border-border bg-white text-muted-foreground")}><StepIcon className="h-3.5 w-3.5" /></div>
-                                    {index < PREORDER_STEPS.length - 1 && <div className={cn("mt-1 h-5 w-0.5", isComplete ? "bg-pink" : "bg-border")} />}
-                                  </div>
-                                  <div className="pt-1.5"><p className={cn("text-sm font-semibold", isComplete ? "text-carbon" : "text-muted-foreground")}>{step.label}</p>{isCurrent && <p className="mt-0.5 text-xs text-pink">Current status</p>}</div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </section>
-                    );
-                  })}
-                </div>
-              ) : isCancelled ? (
+              {isCancelled ? (
                 <div className="flex items-center gap-3 text-red-600 py-4">
                   <X className="w-5 h-5" />
 
@@ -326,7 +269,7 @@ export default function TrackOrder() {
               )}
             </div>
 
-            {trackingView === "delivery" && <div className="border border-border p-6">
+            <div className="border border-border p-6">
               <h3 className="font-heading font-bold text-carbon mb-4">
                 Delivery Information
               </h3>
@@ -343,7 +286,7 @@ export default function TrackOrder() {
                   </p>
                 )}
               </div>
-            </div>}
+            </div>
 
             <div className="text-center">
               <Link

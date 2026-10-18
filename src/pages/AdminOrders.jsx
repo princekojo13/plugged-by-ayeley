@@ -22,15 +22,6 @@ const STATUSES = [
   { value: "delivered", label: "Delivered" },
   { value: "cancelled", label: "Cancelled" },
 ];
-const PREORDER_STATUSES = [
-  { value: "pending", label: "Received" },
-  { value: "confirmed", label: "Confirmed" },
-  { value: "sourcing", label: "Sourcing from UK" },
-  { value: "shipped", label: "Shipped to Ghana" },
-  { value: "received", label: "Arrived in Ghana" },
-  { value: "delivered", label: "Delivered" },
-  { value: "cancelled", label: "Cancelled" },
-];
 
 function formatGhs(value) {
   return new Intl.NumberFormat("en-GH", {
@@ -102,24 +93,12 @@ function getCalculatedTotal(order) {
 
 function totalsMatch(order) {
   const storedTotal = Number(order.total || 0);
-  const calculatedTotal = getCalculatedTotal({
-    ...order,
-    order_items: order.all_order_items || order.order_items,
-  });
+  const calculatedTotal = getCalculatedTotal(order);
 
   return Math.abs(storedTotal - calculatedTotal) < 0.01;
 }
 
-function isMissingPreorderColumn(error) {
-  const message = String(error?.message || "").toLowerCase();
-  return message.includes("is_preorder") && (
-    message.includes("does not exist") ||
-    message.includes("schema cache") ||
-    message.includes("could not find")
-  );
-}
-
-export default function AdminOrders({ preordersOnly = false }) {
+export default function AdminOrders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -140,7 +119,9 @@ export default function AdminOrders({ preordersOnly = false }) {
     setDataLoadError("");
 
     try {
-      const orderSelection = `
+      const { data, error: queryError } = await supabase
+        .from("orders")
+        .select(`
           id,
           order_number,
           full_name:customer_name,
@@ -170,45 +151,21 @@ export default function AdminOrders({ preordersOnly = false }) {
             unit_price:product_price_snapshot,
             quantity,
             line_total,
-            is_preorder,
-            preorder_status,
             created_at
           )
-        `;
-
-      let { data, error: queryError } = await supabase
-        .from("orders")
-        .select(orderSelection)
-        .order("created_at", { ascending: false });
-
-      if (queryError && isMissingPreorderColumn(queryError)) {
-        if (preordersOnly) {
-          throw new Error("Pre-orders are not enabled in the live database yet. Apply supabase/sql/support_preorder_orders.sql in the Supabase SQL Editor.");
-        }
-        const fallback = await supabase
-          .from("orders")
-          .select(orderSelection.replace(/is_preorder,\s*preorder_status,\s*/, ""))
-          .order("created_at", { ascending: false });
-        data = fallback.data;
-        queryError = fallback.error;
-      }
+        `)
+        .order("created_at", {
+          ascending: false,
+        });
 
       if (queryError) {
         throw queryError;
       }
 
-      const normalized = (data || []).map((order) => {
-        const allItems = (order.order_items || []).map((item) => ({
-          ...item,
-          is_preorder: Boolean(item.is_preorder),
-        }));
-        const visibleItems = allItems.filter((item) => item.is_preorder === preordersOnly);
-        return {
-          ...order,
-          all_order_items: allItems,
-          order_items: visibleItems,
-        };
-      }).filter((order) => order.order_items.length > 0);
+      const normalized = (data || []).map((order) => ({
+        ...order,
+        order_items: order.order_items || [],
+      }));
 
       setOrders(normalized);
     } catch (err) {
@@ -222,7 +179,7 @@ export default function AdminOrders({ preordersOnly = false }) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [preordersOnly]);
+  }, []);
 
   useEffect(() => {
     void loadOrders();
@@ -298,37 +255,6 @@ export default function AdminOrders({ preordersOnly = false }) {
         err?.message ||
           "Could not update the order status."
       );
-    } finally {
-      setUpdating(null);
-    }
-  };
-
-  const updatePreorderStatus = async (order, item, status) => {
-    if (updating === item.id || status === item.preorder_status) return;
-    setUpdating(item.id);
-    setError("");
-    try {
-      const { data, error: updateError } = await supabase.rpc(
-        "update_staff_preorder_status",
-        { p_order_item_id: item.id, p_status: status }
-      );
-      if (updateError) throw updateError;
-      if (!data?.ok) throw new Error(data?.error || "The pre-order status was not updated.");
-      const applyUpdate = (current) => current.map((entry) => entry.id === order.id
-        ? { ...entry, order_items: entry.order_items.map((line) => line.id === item.id ? { ...line, preorder_status: data.status || status } : line) }
-        : entry);
-      setOrders(applyUpdate);
-      setSelectedOrder((current) => current?.id === order.id
-        ? { ...current, order_items: current.order_items.map((line) => line.id === item.id ? { ...line, preorder_status: data.status || status } : line) }
-        : current);
-      toast({
-        variant: "success",
-        title: "Pre-order status updated",
-        description: `${item.product_name} is now ${PREORDER_STATUSES.find((entry) => entry.value === (data.status || status))?.label.toLowerCase()}.`,
-      });
-    } catch (err) {
-      console.error("Failed to update pre-order status:", err);
-      setError(err?.message || "Could not update pre-order status.");
     } finally {
       setUpdating(null);
     }
@@ -504,10 +430,8 @@ export default function AdminOrders({ preordersOnly = false }) {
   return (
     <div className="min-h-screen bg-[#fafafa] text-[#111111]">
       <AdminPageHeader
-        title={preordersOnly ? "Pre-orders" : "Orders"}
-        description={preordersOnly
-          ? "Track out-of-stock items customers have reserved to ship from the UK."
-          : "Review in-stock products, payments, and delivery progress."}
+        title="Orders"
+        description="Review payments, update fulfilment, and track delivery progress."
         actions={<button type="button" onClick={() => loadOrders(true)} disabled={refreshing} className="inline-flex items-center gap-2 rounded-xl border border-black/10 bg-white px-4 py-2.5 text-sm font-semibold transition hover:border-[#c20f4d]/40 hover:bg-[#fff7fa] hover:text-[#b10b46] disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />Refresh</button>}
       />
 
@@ -639,13 +563,12 @@ export default function AdminOrders({ preordersOnly = false }) {
               </div>
 
               <h2 className="mt-5 font-heading text-xl font-bold">
-                {preordersOnly ? "No pre-orders found" : "No in-stock orders found"}
+                No orders found
               </h2>
 
               <p className="mt-2 max-w-sm text-sm leading-6 text-black/40">
-                {preordersOnly
-                  ? "Customer pre-orders will appear here after the preorder database setup is applied."
-                  : "Orders containing in-stock products will appear here."}
+                Orders will appear here when
+                customers place them.
               </p>
             </div>
           ) : (
@@ -668,16 +591,10 @@ export default function AdminOrders({ preordersOnly = false }) {
                   selectedOrder?.id === order.id;
 
                 const itemSubtotal =
-                  getItemSubtotal({
-                    ...order,
-                    order_items: order.all_order_items || order.order_items,
-                  });
+                  getItemSubtotal(order);
 
                 const calculatedTotal =
-                  getCalculatedTotal({
-                    ...order,
-                    order_items: order.all_order_items || order.order_items,
-                  });
+                  getCalculatedTotal(order);
 
                 const storedTotal =
                   Number(order.total || 0);
@@ -844,13 +761,8 @@ export default function AdminOrders({ preordersOnly = false }) {
 
                         <div className="mt-6">
                           <h3 className="text-sm font-bold">
-                            {preordersOnly ? "Pre-order Items" : "In-stock Items"}
+                            Order Items
                           </h3>
-                          <p className="mt-1 text-xs leading-5 text-black/45">
-                            {preordersOnly
-                              ? "Only the out-of-stock items from this checkout are listed here. The order total below covers the complete checkout."
-                              : "Only in-stock items are listed here. Any pre-order items from this checkout appear in Pre-orders."}
-                          </p>
 
                           <div className="mt-3 overflow-hidden rounded-2xl border border-black/[0.07] bg-white">
                             {(order.order_items || []).length ===
@@ -878,24 +790,6 @@ export default function AdminOrders({ preordersOnly = false }) {
                                         <p className="font-semibold">
                                           {item.product_name}
                                         </p>
-                                        {item.is_preorder && (
-                                          <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-amber-700">
-                                            Pre-order
-                                          </span>
-                                        )}
-                                        {preordersOnly && (
-                                          <label className="mt-2 flex max-w-xs items-center gap-2 text-xs font-medium text-black/55">
-                                            <span className="shrink-0">Pre-order progress</span>
-                                            <select
-                                              value={item.preorder_status || "pending"}
-                                              onChange={(event) => updatePreorderStatus(order, item, event.target.value)}
-                                              disabled={updating === item.id}
-                                              className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white px-2 py-1.5 text-xs font-semibold text-black outline-none focus:border-[#ff1f8f] disabled:opacity-60"
-                                            >
-                                              {PREORDER_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
-                                            </select>
-                                          </label>
-                                        )}
 
                                         <p className="mt-1 text-xs text-black/40">
                                           {formatGhs(
@@ -990,7 +884,6 @@ export default function AdminOrders({ preordersOnly = false }) {
                         </div>
 
                         <div className="mt-6 grid gap-4 md:grid-cols-2">
-                          {!preordersOnly && (
                           <ControlCard label="Order Status">
                             <select
                               value={order.status}
@@ -1017,7 +910,6 @@ export default function AdminOrders({ preordersOnly = false }) {
                               )}
                             </select>
                           </ControlCard>
-                          )}
 
                           <ControlCard label="Payment Status">
                             <div className="flex min-h-[48px] flex-wrap items-center justify-between gap-3 rounded-xl border border-black/10 bg-[#fafafa] px-4 py-3">

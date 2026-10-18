@@ -3,9 +3,6 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 const CartContext = createContext(null);
 const STORAGE_KEY = "plugged_cart_v1";
 
-// Out-of-stock items can be pre-ordered (they ship from the UK); cap the qty.
-export const PREORDER_MAX = 5;
-
 export function CartProvider({ children }) {
   const [items, setItems] = useState(() => {
     try {
@@ -22,14 +19,13 @@ export function CartProvider({ children }) {
 
   const addToCart = useCallback((product, quantity = 1) => {
     const stock = typeof product.stock === "number" ? product.stock : Infinity;
-    const isPreorder = stock <= 0;
-    const max = isPreorder ? PREORDER_MAX : stock;
+    if (stock <= 0) return;
     setItems((prev) => {
       const existing = prev.find((i) => i.product_id === product.id);
       if (existing) {
         const newQty = Math.min(existing.quantity + quantity, max);
         return prev.map((i) =>
-          i.product_id === product.id ? { ...i, quantity: newQty, preorder: isPreorder } : i
+          i.product_id === product.id ? { ...i, quantity: newQty } : i
         );
       }
       return [
@@ -41,7 +37,6 @@ export function CartProvider({ children }) {
           quantity: Math.min(quantity, max),
           image: product.images?.[0] || "",
           stock: product.stock,
-          preorder: isPreorder,
         },
       ];
     });
@@ -51,9 +46,9 @@ export function CartProvider({ children }) {
     if (quantity < 1) return;
     setItems((prev) => prev.map((i) => {
       if (i.product_id !== productId) return i;
-      const preorder = i.preorder || typeof i.stock === "number" && i.stock <= 0;
-      const max = preorder ? PREORDER_MAX : (typeof i.stock === "number" ? i.stock : Infinity);
-      return { ...i, preorder, quantity: Math.min(quantity, max) };
+      const max = typeof i.stock === "number" ? i.stock : Infinity;
+      if (max <= 0) return i;
+      return { ...i, quantity: Math.min(quantity, max) };
     }));
   }, []);
 
@@ -63,13 +58,10 @@ export function CartProvider({ children }) {
       const product = byId.get(item.product_id);
       if (!product) return item;
       const stock = Math.max(0, Number(product.stock_quantity ?? 0));
-      const preorder = stock === 0;
-      const max = preorder ? PREORDER_MAX : stock;
       return {
         ...item,
         stock,
-        preorder,
-        quantity: Math.max(1, Math.min(item.quantity, max)),
+        quantity: stock > 0 ? Math.max(1, Math.min(item.quantity, stock)) : item.quantity,
       };
     }));
   }, []);

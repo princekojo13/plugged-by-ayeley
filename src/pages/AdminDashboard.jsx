@@ -329,7 +329,7 @@ export default function AdminDashboard() {
                   href="/admin/orders"
                   icon={<ShoppingBag className="h-6 w-6" />}
                   title="Orders"
-                  description="Review in-stock products, track payments and deliveries."
+                  description="Review orders, track payments and update delivery status."
                   badge={
                     pendingPayments > 0
                       ? `${pendingPayments} payment${pendingPayments === 1 ? "" : "s"} pending`
@@ -337,14 +337,6 @@ export default function AdminDashboard() {
                         ? `${pendingOrders} pending`
                       : "All caught up"
                   }
-                />
-
-                <ManagementCard
-                  href="/admin/pre-orders"
-                  icon={<Clock3 className="h-6 w-6" />}
-                  title="Pre-orders"
-                  description="Review out-of-stock items customers reserved."
-                  badge="Ships from UK"
                 />
 
                 <ManagementCard

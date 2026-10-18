@@ -120,7 +120,6 @@ Deno.serve(async (req: Request) => {
         status: result.order_status,
         created_at: result.created_at,
         delivery_region: result.delivery_region,
-        preorder_items: Array.isArray(result.preorder_items) ? result.preorder_items : [],
       },
     }, 200, headers);
   } catch (error) {

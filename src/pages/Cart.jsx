@@ -42,17 +42,22 @@ export default function Cart() {
         return;
       }
 
-      const activeIds = new Set((data || []).map((product) => product.id));
+      const currentProducts = data || [];
+      const activeIds = new Set(currentProducts.map((product) => product.id));
       const unavailableIds = productIds.filter((id) => !activeIds.has(id));
-      if (unavailableIds.length) {
-        unavailableIds.forEach(removeFromCart);
+      const outOfStockIds = currentProducts
+        .filter((product) => Number(product.stock_quantity) <= 0)
+        .map((product) => product.id);
+      const removeIds = [...new Set([...unavailableIds, ...outOfStockIds])];
+      if (removeIds.length) {
+        removeIds.forEach(removeFromCart);
         setAvailabilityNotice(
-          unavailableIds.length === 1
-            ? "An item that is no longer available was removed from your cart."
-            : "Items that are no longer available were removed from your cart."
+          removeIds.length === 1
+            ? "An unavailable item was removed from your cart. You can ask about it from the product page."
+            : "Unavailable items were removed from your cart. You can ask about them from their product pages."
         );
       }
-      refreshProductAvailability(data || []);
+      refreshProductAvailability(currentProducts);
       setAvailabilityStatus("ready");
     };
 
@@ -129,15 +134,11 @@ export default function Cart() {
                   </button>
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">₵{item.price.toFixed(2)} each</p>
-                {item.preorder && (
-                  <span className="inline-block mt-1 text-[10px] font-bold uppercase tracking-wider bg-carbon text-white px-2 py-0.5">
-                    Ships from UK · 10–21 days
-                  </span>
-                )}
                 <div className="flex items-center justify-between mt-auto pt-3">
                   <div className="flex items-center border border-border">
                     <button
                       onClick={() => updateQuantity(item.product_id, item.quantity - 1)}
+                      disabled={Number(item.stock) <= 0}
                       className="w-9 h-9 flex items-center justify-center hover:bg-london transition-colors"
                       aria-label="Decrease"
                     >
@@ -146,6 +147,7 @@ export default function Cart() {
                     <span className="w-10 text-center text-sm font-semibold">{item.quantity}</span>
                     <button
                       onClick={() => updateQuantity(item.product_id, item.quantity + 1)}
+                      disabled={Number(item.stock) <= 0 || item.quantity >= Number(item.stock)}
                       className="w-9 h-9 flex items-center justify-center hover:bg-london transition-colors"
                       aria-label="Increase"
                     >
@@ -183,7 +185,7 @@ export default function Cart() {
             <p className="mt-2 text-center text-xs text-muted-foreground">
               Delivery and your full total appear after you choose a delivery location.
             </p>
-            {availabilityStatus === "ready" ? (
+            {availabilityStatus === "ready" && items.every((item) => Number(item.stock) > 0 && item.quantity <= Number(item.stock)) ? (
               <Link
                 to="/checkout"
                 className="w-full mt-6 py-3.5 bg-pink text-white font-bold uppercase tracking-wider text-sm flex items-center justify-center gap-2 hover:bg-carbon transition-colors"

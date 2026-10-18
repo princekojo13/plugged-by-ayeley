@@ -75,17 +75,7 @@ begin
     'order_number', v_order.order_number,
     'order_status', v_order.order_status,
     'created_at', v_order.created_at,
-    'delivery_region', v_order.delivery_region,
-    'preorder_items', coalesce((
-      select jsonb_agg(jsonb_build_object(
-        'id', oi.id,
-        'name', oi.product_name_snapshot,
-        'quantity', oi.quantity,
-        'status', coalesce(oi.preorder_status, 'pending')
-      ) order by oi.created_at, oi.id)
-      from public.order_items oi
-      where oi.order_id = v_order.id and oi.is_preorder is true
-    ), '[]'::jsonb)
+    'delivery_region', v_order.delivery_region
   );
 end;
 $function$;

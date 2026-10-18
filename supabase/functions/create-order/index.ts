@@ -128,11 +128,8 @@ async function createOrderQuote(
   for (const product of products) {
     const quantity = quantities.get(product.id) || 0;
     const stock = Math.max(0, Number(product.stock_quantity) || 0);
-    if (stock > 0 && quantity > stock) {
+    if (quantity > stock) {
       return respond({ success: false, error: "Your cart quantity exceeds the available stock. Please update your cart." }, 409, headers);
-    }
-    if (stock === 0 && quantity > 5) {
-      return respond({ success: false, error: "Pre-orders are limited to 5 of each out-of-stock product." }, 409, headers);
     }
   }
 
@@ -302,28 +299,17 @@ Deno.serve(async (req: Request) => {
       return respond({ success: false, error: "Your cart is empty or invalid." }, 400, headers);
     }
 
-    const itemQuantities = new Map<string, number>();
-    for (const value of incomingItems) {
+    const items = incomingItems.map((value: unknown) => {
       const item = record(value);
-      const productId = text(item.product_id ?? item.productId ?? item.id, 40);
-      const quantity = number(item.quantity ?? item.qty);
-      if (
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(productId) ||
-        !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 100
-      ) {
-        return respond({ success: false, error: "One or more cart items are invalid." }, 400, headers);
-      }
-      const totalQuantity = (itemQuantities.get(productId) || 0) + quantity;
-      if (totalQuantity > 100) {
-        return respond({ success: false, error: "Quantity must be between 1 and 100 per product." }, 400, headers);
-      }
-      itemQuantities.set(productId, totalQuantity);
+      return {
+        product_id: text(item.product_id ?? item.productId ?? item.id, 40),
+        quantity: number(item.quantity ?? item.qty),
+      };
+    });
+
+    if (items.some((item) => !item.product_id || !Number.isSafeInteger(item.quantity))) {
+      return respond({ success: false, error: "One or more cart items are invalid." }, 400, headers);
     }
-    const items = [...itemQuantities.entries()].map(([product_id, quantity]) => ({
-      product_id,
-      quantity,
-      preorder: false,
-    }));
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -366,14 +352,9 @@ Deno.serve(async (req: Request) => {
     const productsById = new Map((activeProducts || []).map((product) => [product.id, product]));
     for (const item of items) {
       const stock = Math.max(0, Number(productsById.get(item.product_id)?.stock_quantity) || 0);
-      if (stock > 0 && item.quantity > stock) {
+      if (item.quantity > stock) {
         return respond({ success: false, error: "Your cart quantity exceeds the available stock. Please update your cart." }, 409, headers);
       }
-      if (stock === 0 && item.quantity > 5) {
-        return respond({ success: false, error: "Pre-orders are limited to 5 of each out-of-stock product." }, 409, headers);
-      }
-      // Recompute this flag from live stock. Never trust a preorder flag sent by the browser.
-      item.preorder = stock === 0;
     }
 
     const { data: settings, error: settingsError } = await db
@@ -440,7 +421,6 @@ Deno.serve(async (req: Request) => {
       console.error("create_order RPC did not return an order ID and number.");
       return respond({ success: false, error: "We couldn't confirm the new order." }, 500, headers);
     }
-    const hasPreorder = items.some((item) => item.preorder);
 
     if (paymentMethod === "cash_on_delivery") {
       const { error: confirmError } = await db.rpc("confirm_cod_order", {
@@ -465,7 +445,7 @@ Deno.serve(async (req: Request) => {
       return respond({
         success: true,
         message: "Your order has been placed.",
-        order: { ...savedOrder, has_preorder: hasPreorder },
+        order: savedOrder,
         distance_km: Number(created.distance_km),
       }, 200, headers);
     }
@@ -518,7 +498,7 @@ Deno.serve(async (req: Request) => {
         console.error("Could not load the Moolre order:", orderError?.message);
         return respond({ success: false, error: "The payment request started, but the order confirmation could not be loaded. Contact the store with reference " + reference }, 500, headers);
       }
-      return respond({ success: true, payment_pending: true, otp_required: otpRequired, order: { ...savedOrder, has_preorder: hasPreorder } }, 200, headers);
+      return respond({ success: true, payment_pending: true, otp_required: otpRequired, order: savedOrder }, 200, headers);
     }
 
     return respond({ success: false, error: "Invalid payment method." }, 400, headers);

@@ -1,23 +1,28 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { ShoppingBag, Minus, Plus } from "lucide-react";
+import { ShoppingBag, Minus, Plus, MessageCircle } from "lucide-react";
 import { Image } from "@/components/ui/image";
 import { cn } from "@/lib/utils";
-import { useCart, PREORDER_MAX } from "@/lib/cartContext";
+import { useCart } from "@/lib/cartContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useStoreSettings, whatsappLink } from "@/lib/useStoreSettings";
 
 export default function ProductCard({ product }) {
   const { addToCart } = useCart();
+  const { whatsapp } = useStoreSettings();
   const [open, setOpen] = useState(false);
   const [qty, setQty] = useState(1);
   const compareAtPrice = Number(product.compare_at_price);
   const currentPrice = Number(product.price);
   const onSale = Number.isFinite(compareAtPrice) && compareAtPrice > currentPrice;
   const inStock = product.stock > 0;
-  const isPreorder = !inStock;
   const effectivePrice = currentPrice;
-  const maxQty = inStock ? product.stock || 99 : PREORDER_MAX;
+  const maxQty = product.stock || 1;
+  const interestLink = whatsappLink(
+    whatsapp,
+    `Hi, I’m interested in ${product.name}. Please let me know when it is back in stock.`
+  );
 
   const openModal = () => {
     setQty(1);
@@ -62,9 +67,9 @@ export default function ProductCard({ product }) {
                 Low Stock
               </span>
             )}
-            {isPreorder && (
-              <span className="bg-pink text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-1">
-                Out of stock · Pre-order
+            {!inStock && (
+              <span className="bg-carbon text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-1">
+                Out of stock
               </span>
             )}
           </div>
@@ -84,17 +89,19 @@ export default function ProductCard({ product }) {
         </div>
         </Link>
         <div className="px-2.5 pb-2.5 sm:px-4 sm:pb-4">
-          <button
-            type="button"
-            onClick={openModal}
-            className={cn(
-              "w-full min-h-10 py-2 text-[10px] sm:text-xs font-bold uppercase tracking-wide sm:tracking-wider transition-colors flex items-center justify-center gap-1 sm:gap-2",
-              inStock ? "bg-carbon text-white hover:bg-pink" : "bg-pink text-white hover:bg-carbon"
-            )}
-          >
-            <ShoppingBag className="w-3.5 h-3.5" />
-            {inStock ? "Add to Cart" : "Pre-order"}
-          </button>
+          {inStock ? (
+            <button
+              type="button"
+              onClick={openModal}
+              className={cn("w-full min-h-10 py-2 text-[10px] sm:text-xs font-bold uppercase tracking-wide sm:tracking-wider transition-colors flex items-center justify-center gap-1 sm:gap-2", "bg-carbon text-white hover:bg-pink")}
+            >
+              <ShoppingBag className="w-3.5 h-3.5" /> Add to Cart
+            </button>
+          ) : (
+            <a href={interestLink} target="_blank" rel="noopener noreferrer" className="w-full min-h-10 py-2 bg-pink text-white hover:bg-carbon text-[10px] sm:text-xs font-bold uppercase tracking-wide sm:tracking-wider transition-colors flex items-center justify-center gap-1 sm:gap-2">
+              <MessageCircle className="w-3.5 h-3.5" /> I’m Interested
+            </a>
+          )}
         </div>
       </article>
 
@@ -102,7 +109,7 @@ export default function ProductCard({ product }) {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-heading text-carbon">
-              {inStock ? "Add to Cart" : "Pre-order"}
+              Add to Cart
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
@@ -115,11 +122,6 @@ export default function ProductCard({ product }) {
                 <p className="text-sm font-bold text-pink">₵{effectivePrice.toFixed(2)}</p>
               </div>
             </div>
-            {isPreorder && (
-              <div className="bg-pink/5 border-l-4 border-pink p-3 text-xs text-muted-foreground">
-                This item is currently out of stock. Place a pre-order and we’ll contact you with the expected delivery timing.
-              </div>
-            )}
             <div>
               <p className="text-xs uppercase tracking-wider font-semibold text-carbon mb-2">Quantity</p>
               <div className="flex items-center border border-border w-fit">
@@ -144,15 +146,12 @@ export default function ProductCard({ product }) {
               {inStock && product.stock <= 5 && (
                 <p className="text-xs text-orange-600 mt-2">Only {product.stock} left in stock</p>
               )}
-              {isPreorder && (
-                <p className="text-xs text-muted-foreground mt-2">Max {PREORDER_MAX} per Order</p>
-              )}
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button onClick={confirmAdd} className="bg-pink text-white hover:bg-carbon">
-              {inStock ? "Add to Cart" : "Confirm Pre-order"}
+              Add to Cart
             </Button>
           </DialogFooter>
         </DialogContent>

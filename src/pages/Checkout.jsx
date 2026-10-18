@@ -25,7 +25,7 @@ async function getCheckoutQuote(location, items) {
   const [productsResult, settingsResult] = await Promise.all([
     supabase
       .from("products")
-      .select("id,price")
+      .select("id,price,stock_quantity")
       .in("id", productIds)
       .eq("active", true),
     supabase
@@ -43,6 +43,11 @@ async function getCheckoutQuote(location, items) {
   const products = productsResult.data || [];
   if (products.length !== productIds.length) {
     throw new Error("One or more items are no longer available. Refresh your cart and try again.");
+  }
+
+  const productById = new Map(products.map((product) => [product.id, product]));
+  if (items.some((item) => Number(productById.get(item.product_id)?.stock_quantity) < Number(item.quantity))) {
+    throw new Error("An item in your cart is out of stock or no longer available in that quantity. Return to your cart to update it.");
   }
 
   const pricesById = new Map(products.map((product) => [product.id, Number(product.price)]));
@@ -238,6 +243,10 @@ export default function Checkout() {
   const validateForm = () => {
     if (items.length === 0) {
       return "Your cart is empty.";
+    }
+
+    if (items.some((item) => Number(item.stock) <= 0 || Number(item.quantity) > Number(item.stock))) {
+      return "An unavailable item is in your cart. Return to your cart and remove it before continuing.";
     }
 
     if (form.full_name.trim().length < 2) {
@@ -578,12 +587,6 @@ export default function Checkout() {
           <p className="mt-3 text-muted-foreground">
             Thank you, {placedOrder.full_name}.
           </p>
-
-          {placedOrder.has_preorder && (
-            <p className="mt-5 border border-amber-200 bg-amber-50 p-4 text-left text-sm text-amber-900">
-              Your order includes an out-of-stock pre-order. We’ve saved it with your order and will contact you with delivery timing when it is available.
-            </p>
-          )}
 
           {placedOrder.payment_method === PAYMENT_METHODS.moolre && (
             <div className="mt-5 border border-pink/20 bg-pink/5 p-4 text-left text-sm text-carbon">

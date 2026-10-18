@@ -24,15 +24,6 @@ const ORDER_STATUSES = [
   { value: "out_for_delivery", label: "Out for delivery" },
   { value: "delivered", label: "Delivered" },
 ];
-const PREORDER_STATUSES = [
-  { value: "pending", label: "Received" },
-  { value: "confirmed", label: "Confirmed" },
-  { value: "sourcing", label: "Sourcing from UK" },
-  { value: "shipped", label: "Shipped to Ghana" },
-  { value: "received", label: "Arrived in Ghana" },
-  { value: "delivered", label: "Delivered" },
-  { value: "cancelled", label: "Cancelled" },
-];
 
 function dateLabel(value) {
   if (!value) return "—";
@@ -88,8 +79,6 @@ export default function AssistantWorkspace() {
   const [updating, setUpdating] = useState(null);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
   const [search, setSearch] = useState("");
-  const [orderView, setOrderView] = useState("all");
-  const [preorderSetupMissing, setPreorderSetupMissing] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -111,26 +100,13 @@ export default function AssistantWorkspace() {
 
       if (!nextOrders.length) {
         setItemsByOrder({});
-        const { error: schemaError } = await supabase.from("order_items").select("is_preorder").limit(0);
-        setPreorderSetupMissing(Boolean(schemaError && String(schemaError.message || "").toLowerCase().includes("is_preorder")));
         return;
       }
 
-      let { data: orderItems, error: itemsError } = await supabase
+      const { data: orderItems, error: itemsError } = await supabase
         .from("order_items")
-        .select("id,order_id,product_name_snapshot,quantity,is_preorder,preorder_status")
+        .select("id,order_id,product_name_snapshot,quantity")
         .in("order_id", nextOrders.map((order) => order.id));
-      if (itemsError && String(itemsError.message || "").toLowerCase().includes("is_preorder")) {
-        setPreorderSetupMissing(true);
-        const fallback = await supabase
-          .from("order_items")
-          .select("id,order_id,product_name_snapshot,quantity")
-          .in("order_id", nextOrders.map((order) => order.id));
-        orderItems = (fallback.data || []).map((item) => ({ ...item, is_preorder: false }));
-        itemsError = fallback.error;
-      } else if (!itemsError) {
-        setPreorderSetupMissing(false);
-      }
       if (itemsError) throw itemsError;
 
       const grouped = {};
@@ -171,34 +147,7 @@ export default function AssistantWorkspace() {
     }
   }
 
-  async function updatePreorderStatus(order, item, status) {
-    if (updating || status === item.preorder_status) return;
-    setUpdating(item.id);
-    setError("");
-    setSuccess("");
-    try {
-      const { data, error: updateError } = await supabase.rpc("update_staff_preorder_status", {
-        p_order_item_id: item.id,
-        p_status: status,
-      });
-      if (updateError) throw updateError;
-      if (!data?.ok) throw new Error(data?.error || "The pre-order status was not updated.");
-      setItemsByOrder((current) => ({
-        ...current,
-        [order.id]: (current[order.id] || []).map((line) => line.id === item.id
-          ? { ...line, preorder_status: data.status || status }
-          : line),
-      }));
-      const label = PREORDER_STATUSES.find((entry) => entry.value === (data.status || status))?.label || status;
-      setSuccess(`${item.product_name_snapshot} pre-order updated to ${label.toLowerCase()}.`);
-    } catch (updateError) {
-      setError(updateError?.message || "Could not update the pre-order status.");
-    } finally {
-      setUpdating(null);
-    }
-  }
-
-  const matchingOrders = useMemo(() => {
+  const filteredOrders = useMemo(() => {
     const value = search.trim().toLowerCase();
     if (!value) return orders;
     return orders.filter((order) => [
@@ -209,18 +158,6 @@ export default function AssistantWorkspace() {
       order.delivery_region,
     ].filter(Boolean).some((field) => String(field).toLowerCase().includes(value)));
   }, [orders, search]);
-
-  const filteredOrders = useMemo(() => matchingOrders.filter((order) => {
-    if (orderView === "all") return true;
-    const items = itemsByOrder[order.id] || [];
-    return items.some((item) => Boolean(item.is_preorder) === (orderView === "preorders"));
-  }), [itemsByOrder, matchingOrders, orderView]);
-
-  const orderViewCounts = useMemo(() => ({
-    all: orders.length,
-    orders: orders.filter((order) => (itemsByOrder[order.id] || []).some((item) => !item.is_preorder)).length,
-    preorders: orders.filter((order) => (itemsByOrder[order.id] || []).some((item) => item.is_preorder)).length,
-  }), [itemsByOrder, orders]);
 
   const stats = useMemo(() => ({
     total: orders.length,
@@ -255,33 +192,12 @@ export default function AssistantWorkspace() {
       <main className="mx-auto max-w-7xl px-5 py-8 sm:px-8">
         {error && <div role="alert" className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">{error}</div>}
         {success && <div role="status" className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-800">{success}</div>}
-        {preorderSetupMissing && <div role="status" className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-800">Pre-orders cannot be submitted or classified yet. The live database is missing the preorder setup. Apply <code className="font-semibold">supabase/sql/support_preorder_orders.sql</code> in Supabase, then deploy the <code className="font-semibold">create-order</code> Edge Function.</div>}
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat label="Total Orders" value={stats.total} pink />
           <Stat label="Pending" value={stats.pending} />
           <Stat label="In Progress" value={stats.inProgress} />
           <Stat label="Delivered" value={stats.delivered} valueClassName="text-emerald-700" />
-        </div>
-
-        <div className="mt-6 flex flex-wrap gap-2" role="group" aria-label="Filter orders by type">
-          {[
-            { id: "all", label: "All" },
-            { id: "orders", label: "In-stock orders" },
-            { id: "preorders", label: "Pre-orders" },
-          ].map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              onClick={() => { setOrderView(option.id); setExpandedOrderId(null); }}
-              aria-pressed={orderView === option.id}
-              className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${orderView === option.id
-                ? "border-[#ff1f8f] bg-[#fff0f7] text-[#c20f4d]"
-                : "border-black/10 bg-white text-black/60 hover:border-[#ff1f8f]/50"}`}
-            >
-              {option.label} <span className="ml-1 text-xs opacity-70">{orderViewCounts[option.id]}</span>
-            </button>
-          ))}
         </div>
 
         <div className="mt-6 rounded-2xl border border-black/[0.07] bg-white p-4 shadow-sm">
@@ -296,7 +212,7 @@ export default function AssistantWorkspace() {
             />
           </div>
           <div className="mt-4 border-t border-black/[0.06] pt-4 text-sm text-black/40">
-            Showing <span className="font-semibold text-black">{filteredOrders.length}</span> of <span className="font-semibold text-black">{orderViewCounts[orderView]}</span> {orderView === "preorders" ? "pre-orders" : "orders"}
+            Showing <span className="font-semibold text-black">{filteredOrders.length}</span> of <span className="font-semibold text-black">{orders.length}</span> orders
           </div>
         </div>
 
@@ -306,8 +222,8 @@ export default function AssistantWorkspace() {
           ) : filteredOrders.length === 0 ? (
             <div className="flex min-h-[350px] flex-col items-center justify-center px-6 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#fff0f7] text-[#ff1f8f]"><Package className="h-6 w-6" /></div>
-              <h2 className="mt-5 font-heading text-xl font-bold">{orderView === "preorders" ? "No pre-orders found" : "No orders found"}</h2>
-              <p className="mt-2 max-w-sm text-sm leading-6 text-black/40">{orderView === "preorders" ? "Pre-orders will appear here once the preorder database setup is active." : "Orders will appear here when customers place them."}</p>
+              <h2 className="mt-5 font-heading text-xl font-bold">No orders found</h2>
+              <p className="mt-2 max-w-sm text-sm leading-6 text-black/40">Orders will appear here when customers place them.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -327,14 +243,10 @@ export default function AssistantWorkspace() {
                   {filteredOrders.map((order) => {
                     const expanded = expandedOrderId === order.id;
                     const orderItems = itemsByOrder[order.id] || [];
-                    const visibleOrderItems = orderItems.filter((item) => orderView === "all" || Boolean(item.is_preorder) === (orderView === "preorders"));
                     return (
                       <Fragment key={order.id}>
                         <tr className="align-middle transition hover:bg-[#fffdfd]">
-                          <td className="whitespace-nowrap px-4 py-3">
-                            <span className="font-mono text-sm font-bold">#{order.order_number}</span>
-                            {orderItems.some((item) => item.is_preorder) && <span className="mt-1 block w-fit rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">Includes pre-order</span>}
-                          </td>
+                          <td className="whitespace-nowrap px-4 py-3"><span className="font-mono text-sm font-bold">#{order.order_number}</span></td>
                           <td className="max-w-[240px] px-4 py-3">
                             <p className="truncate text-sm font-semibold">{order.customer_name || "—"}</p>
                             <p className="truncate text-xs text-black/45">{order.customer_email || order.customer_phone || "No contact details"}</p>
@@ -379,20 +291,9 @@ export default function AssistantWorkspace() {
                               <div className="mt-6">
                                 <h3 className="text-sm font-bold">Order items</h3>
                                 <div className="mt-3 overflow-hidden rounded-2xl border border-black/[0.07] bg-white">
-                                  {visibleOrderItems.length ? visibleOrderItems.map((item) => (
+                                  {orderItems.length ? orderItems.map((item) => (
                                     <div key={item.id} className="flex items-center justify-between gap-4 border-b border-black/[0.06] px-4 py-4 last:border-b-0">
-                                      <div>
-                                        <p className="font-semibold">{item.product_name_snapshot || "Item"}</p>
-                                        {item.is_preorder && <>
-                                          <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">Pre-order · Ships from UK</span>
-                                          <label className="mt-2 flex max-w-xs items-center gap-2 text-xs font-medium text-black/50">
-                                            <span className="shrink-0">Progress</span>
-                                            <select value={item.preorder_status || "pending"} onChange={(event) => void updatePreorderStatus(order, item, event.target.value)} disabled={Boolean(updating)} className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white px-2 py-1.5 text-xs font-semibold text-black outline-none focus:border-[#ff1f8f] disabled:opacity-60">
-                                              {PREORDER_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
-                                            </select>
-                                          </label>
-                                        </>}
-                                      </div>
+                                      <p className="font-semibold">{item.product_name_snapshot || "Item"}</p>
                                       <p className="shrink-0 text-sm text-black/55">× {item.quantity}</p>
                                     </div>
                                   )) : <p className="px-4 py-6 text-sm text-black/45">No order items found.</p>}
@@ -400,7 +301,6 @@ export default function AssistantWorkspace() {
                               </div>
 
                               <div className="mt-6 grid gap-4 md:grid-cols-2">
-                                {orderView !== "preorders" && (
                                 <ControlCard label="Order status">
                                   <select
                                     value={order.order_status || "pending"}
@@ -412,7 +312,6 @@ export default function AssistantWorkspace() {
                                     {ORDER_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
                                   </select>
                                 </ControlCard>
-                                )}
                                 <ControlCard label="Assigned permissions">
                                   <div className="flex min-h-12 items-center gap-2 rounded-xl border border-black/10 bg-[#fafafa] px-4 py-3 text-sm text-black/60"><ShoppingBag className="h-4 w-4 text-[#ff1f8f]" />View orders and update delivery status</div>
                                 </ControlCard>
