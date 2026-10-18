@@ -28,7 +28,6 @@ const DEFAULT_SETTINGS = {
   cod_enabled: true,
   moolre_enabled: false,
   cod_accra_only: true,
-  cod_max_distance_km: 30,
   cod_hold_minutes: 1440,
   store_open: true,
   maintenance_mode: false,
@@ -96,7 +95,7 @@ export default function AdminSettings() {
     const numberFields = [
       "business_latitude", "business_longitude", "delivery_rate",
       "delivery_distance_unit", "distance_multiplier", "low_stock_default",
-      "cod_max_distance_km", "cod_hold_minutes",
+      "cod_hold_minutes",
     ];
     const payload = { updated_at: new Date().toISOString() };
     for (const [field] of TEXT_FIELDS) payload[field] = settings[field]?.trim() || null;
@@ -105,9 +104,6 @@ export default function AdminSettings() {
     payload.max_delivery_distance_km = settings.max_delivery_distance_km === "" || settings.max_delivery_distance_km === null || settings.max_delivery_distance_km === undefined
       ? null
       : Number(settings.max_delivery_distance_km);
-    payload.cod_max_distance_km = settings.cod_max_distance_km === "" || settings.cod_max_distance_km === null || settings.cod_max_distance_km === undefined
-      ? null
-      : Number(settings.cod_max_distance_km);
     for (const field of [
       "cod_enabled", "moolre_enabled", "cod_accra_only", "store_open", "maintenance_mode",
     ]) payload[field] = Boolean(settings[field]);
@@ -125,7 +121,7 @@ export default function AdminSettings() {
       return;
     }
     if (payload.delivery_rate < 0 || payload.delivery_distance_unit <= 0 || payload.distance_multiplier <= 0
-      || payload.low_stock_default < 0 || (payload.cod_max_distance_km !== null && payload.cod_max_distance_km < 0)
+      || payload.low_stock_default < 0
       || payload.cod_hold_minutes < 1
       || !Number.isSafeInteger(payload.low_stock_default)
       || !Number.isSafeInteger(payload.cod_hold_minutes)
@@ -197,7 +193,6 @@ export default function AdminSettings() {
               <NumberField label="Distance unit (km)" value={settings.delivery_distance_unit} min="0.1" step="0.1" onChange={(value) => updateField("delivery_distance_unit", value)} />
               <NumberField label="Distance multiplier" value={settings.distance_multiplier} min="0.1" step="0.01" onChange={(value) => updateField("distance_multiplier", value)} />
               <NumberField label="Max delivery distance (km, optional)" value={settings.max_delivery_distance_km ?? ""} min="0.1" step="0.1" optional onChange={(value) => updateField("max_delivery_distance_km", value)} />
-              <NumberField label="Cash on delivery max distance (km, optional)" value={settings.cod_max_distance_km ?? ""} min="0" step="0.1" optional onChange={(value) => updateField("cod_max_distance_km", value)} />
               <Toggle label="Cash on delivery in Accra only" description="Restrict cash on delivery to the Accra delivery area." checked={settings.cod_accra_only} onChange={(value) => updateField("cod_accra_only", value)} />
             </div>
           </SettingsSection>

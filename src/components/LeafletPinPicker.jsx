@@ -80,8 +80,7 @@ export default function LeafletPinPicker({ location, onSelect }) {
 
   const center = location ? [location.lat, location.lng] : ACCRA_HUB;
 
-  const searchLocation = async (event) => {
-    event.preventDefault();
+  const searchLocation = async () => {
     const term = query.trim();
     if (term.length < 3 || searching) return;
 
@@ -165,7 +164,7 @@ export default function LeafletPinPicker({ location, onSelect }) {
 
   return (
     <div className="w-full">
-      <form onSubmit={searchLocation} className="relative z-10 flex gap-2 border-b border-border bg-white p-3">
+      <div className="relative z-10 flex gap-2 border-b border-border bg-white p-3">
         <label htmlFor="delivery-map-search" className="sr-only">Search a Ghana location</label>
         <div className="relative min-w-0 flex-1">
           <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
@@ -174,17 +173,24 @@ export default function LeafletPinPicker({ location, onSelect }) {
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                event.stopPropagation();
+                void searchLocation();
+              }
+            }}
             placeholder="Search town, area or landmark"
             maxLength={120}
             autoComplete="street-address"
             className="ck-input pl-9"
           />
         </div>
-        <button type="submit" disabled={searching || query.trim().length < 3} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md bg-pink px-3 text-sm font-semibold text-white transition hover:bg-carbon disabled:cursor-not-allowed disabled:opacity-50">
+        <button type="button" onClick={() => void searchLocation()} disabled={searching || query.trim().length < 3} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md bg-pink px-3 text-sm font-semibold text-white transition hover:bg-carbon disabled:cursor-not-allowed disabled:opacity-50">
           {searching ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Search className="h-4 w-4" aria-hidden="true" />}
           <span className="hidden sm:inline">Search</span>
         </button>
-      </form>
+      </div>
       <p className="border-b border-border bg-white px-3 pb-2 text-[11px] text-muted-foreground">Search a Ghana town, area or landmark, then fine-tune the pin. Map data © OpenStreetMap contributors.</p>
       {searchError && <p role="status" className="bg-white px-3 py-2 text-xs text-muted-foreground">{searchError}</p>}
       {results.length > 0 && (

@@ -66,7 +66,6 @@ function isCustomerError(message: string): boolean {
     "Sorry, this address is outside our delivery range",
     "The store is currently closed and cannot accept orders",
     "Cash on delivery is only available within Greater Accra",
-    "This address is outside the cash on delivery distance limit",
     "Please enter a valid Mobile Money number",
     "Please select a valid Mobile Money network",
   ].some((known) => message.includes(known)) ||
@@ -369,7 +368,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: settings, error: settingsError } = await db
       .from("store_settings")
-      .select("store_open,maintenance_mode,moolre_enabled,cod_enabled,cod_accra_only,cod_max_distance_km")
+      .select("store_open,maintenance_mode,moolre_enabled,cod_enabled,cod_accra_only")
       .eq("id", true)
       .maybeSingle();
     if (settingsError || !settings) {
@@ -388,19 +387,6 @@ Deno.serve(async (req: Request) => {
     if (paymentMethod === "cash_on_delivery") {
       if (settings.cod_accra_only && region.toLowerCase() !== "greater accra") {
         return respond({ success: false, error: "Cash on delivery is only available within Greater Accra." }, 400, headers);
-      }
-      if (settings.cod_max_distance_km !== null) {
-        const { data: distance, error: distanceError } = await db.rpc("calculate_distance_km", {
-          p_latitude: latitude,
-          p_longitude: longitude,
-        });
-        if (distanceError || !Number.isFinite(Number(distance))) {
-          console.error("create-order: Delivery distance could not be checked.");
-          return respond({ success: false, error: "Delivery distance could not be checked." }, 503, headers);
-        }
-        if (Number(distance) > Number(settings.cod_max_distance_km)) {
-          return respond({ success: false, error: "This address is outside the cash on delivery distance limit." }, 400, headers);
-        }
       }
     }
 
