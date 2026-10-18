@@ -23,6 +23,13 @@ const STATUSES = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
+const ORDER_HISTORY_RANGES = [
+  { value: "1d", label: "Last 24 hours", days: 1 },
+  { value: "7d", label: "Last 7 days", days: 7 },
+  { value: "30d", label: "Last 30 days", days: 30 },
+  { value: "all", label: "All history", days: null },
+];
+
 function formatGhs(value) {
   return new Intl.NumberFormat("en-GH", {
     style: "currency",
@@ -104,6 +111,7 @@ export default function AdminOrders() {
   const [refreshing, setRefreshing] = useState(false);
   const [updating, setUpdating] = useState(null);
   const [search, setSearch] = useState("");
+  const [historyRange, setHistoryRange] = useState("30d");
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [error, setError] = useState("");
   const [dataLoadError, setDataLoadError] = useState("");
@@ -119,7 +127,11 @@ export default function AdminOrders() {
     setDataLoadError("");
 
     try {
-      const { data, error: queryError } = await supabase
+      const range = ORDER_HISTORY_RANGES.find((item) => item.value === historyRange);
+      const cutoff = range?.days
+        ? new Date(Date.now() - range.days * 24 * 60 * 60 * 1000).toISOString()
+        : null;
+      let query = supabase
         .from("orders")
         .select(`
           id,
@@ -153,10 +165,13 @@ export default function AdminOrders() {
             line_total,
             created_at
           )
-        `)
-        .order("created_at", {
-          ascending: false,
-        });
+        `);
+
+      if (cutoff) query = query.gte("created_at", cutoff);
+
+      const { data, error: queryError } = await query.order("created_at", {
+        ascending: false,
+      });
 
       if (queryError) {
         throw queryError;
@@ -179,7 +194,7 @@ export default function AdminOrders() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [historyRange]);
 
   useEffect(() => {
     void loadOrders();
@@ -479,7 +494,7 @@ export default function AdminOrders() {
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
           <Stat
-            label="Total Orders"
+            label="Orders in range"
             value={showStat(stats.total)}
             pink
           />
@@ -518,18 +533,32 @@ export default function AdminOrders() {
         </div>
 
         <div className="mt-6 rounded-2xl border border-black/[0.07] bg-white p-4 shadow-sm">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black/30" />
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="relative min-w-0 flex-1">
+              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black/30" />
 
-            <input
-              type="search"
-              value={search}
-              onChange={(event) =>
-                setSearch(event.target.value)
-              }
-              placeholder="Search order number, customer, email, phone or city..."
-              className="w-full rounded-xl border border-black/10 bg-[#fafafa] py-3 pl-11 pr-4 text-sm outline-none transition focus:border-[#ff1f8f] focus:bg-white"
-            />
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search order number, customer, email, phone or city..."
+                className="w-full rounded-xl border border-black/10 bg-[#fafafa] py-3 pl-11 pr-4 text-sm outline-none transition focus:border-[#ff1f8f] focus:bg-white"
+              />
+            </div>
+
+            <label className="block sm:w-48">
+              <span className="sr-only">Order history period</span>
+              <select
+                aria-label="Order history period"
+                value={historyRange}
+                onChange={(event) => setHistoryRange(event.target.value)}
+                className="w-full rounded-xl border border-black/10 bg-[#fafafa] px-3 py-3 text-sm font-semibold text-black/70 outline-none transition focus:border-[#ff1f8f] focus:bg-white"
+              >
+                {ORDER_HISTORY_RANGES.map((range) => (
+                  <option key={range.value} value={range.value}>{range.label}</option>
+                ))}
+              </select>
+            </label>
           </div>
 
           <div className="mt-4 border-t border-black/[0.06] pt-4 text-sm text-black/40">
@@ -541,7 +570,7 @@ export default function AdminOrders() {
             <span className="font-semibold text-black">
               {loading ? "…" : dataLoadError ? "—" : orders.length}
             </span>{" "}
-            orders
+            orders in {ORDER_HISTORY_RANGES.find((range) => range.value === historyRange)?.label.toLowerCase()}
           </div>
         </div>
 
