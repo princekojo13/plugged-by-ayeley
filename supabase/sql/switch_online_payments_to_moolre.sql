@@ -18,6 +18,12 @@ alter table public.orders add constraint orders_moolre_ref_check
 
 grant update (moolre_enabled) on table public.store_settings to authenticated;
 
+-- This storefront uses Moolre as its online payment option. The Edge Function
+-- still rejects checkout until its server-side Moolre credentials are present.
+update public.store_settings
+set moolre_enabled = true
+where id = true;
+
 create or replace function public.create_order_with_momo(
   p_customer_name text,
   p_customer_email text,

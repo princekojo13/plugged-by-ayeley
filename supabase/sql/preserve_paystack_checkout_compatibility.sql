@@ -1,3 +1,9 @@
+-- Enable the storefront's Moolre online option. Checkout cannot start a
+-- payment until the required Edge Function secrets are configured.
+update public.store_settings
+set moolre_enabled = true
+where id = true;
+
 create or replace function public.create_order_with_momo(
   p_customer_name text,
   p_customer_email text,

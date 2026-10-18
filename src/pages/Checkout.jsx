@@ -924,19 +924,21 @@ export default function Checkout() {
             {!storeSettings && !settingsError && <p className="mb-4 text-sm text-muted-foreground">Loading checkout options…</p>}
 
             <div className="space-y-4">
-              {storeSettings?.moolre_enabled && <button
+              {storeSettings && <button
                 type="button"
                 onClick={() =>
                   handlePaymentChange(
                     PAYMENT_METHODS.moolre
                   )
                 }
-                disabled={submitting}
+                disabled={submitting || !storeSettings.moolre_enabled}
                 className={`w-full text-left border-2 p-5 transition-colors ${
                   paymentMethod ===
                   PAYMENT_METHODS.moolre
                     ? "border-pink bg-pink/5"
-                    : "border-border hover:border-pink/50"
+                    : storeSettings.moolre_enabled
+                      ? "border-border hover:border-pink/50"
+                      : "border-border bg-gray-50 opacity-70 cursor-not-allowed"
                 } disabled:opacity-60`}
               >
                 <div className="flex items-start gap-4">
@@ -958,11 +960,13 @@ export default function Checkout() {
 
                   <div>
                     <p className="font-bold text-carbon">
-                      Pay Online
+                      Pay Online with Mobile Money
                     </p>
 
                     <p className="text-sm text-muted-foreground mt-1">
-                      Pay with Mobile Money through Moolre. Approve the prompt on your phone.
+                      {storeSettings.moolre_enabled
+                        ? "Pay securely through Moolre. Approve the payment prompt on your phone."
+                        : "Moolre payments are not enabled for the store yet."}
                     </p>
                   </div>
                 </div>

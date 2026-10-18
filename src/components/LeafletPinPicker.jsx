@@ -15,8 +15,24 @@ const GHANA_BOUNDS = [
   [4.5, -3.5],
   [11.5, 1.5],
 ];
+const GHANA_BBOX = "-3.5,4.5,1.5,11.5";
 const locationSearchCache = new Map();
 let lastLocationSearchAt = 0;
+
+function formatPlaceName(properties = {}) {
+  const parts = [
+    properties.name,
+    properties.housenumber && properties.street
+      ? `${properties.housenumber} ${properties.street}`
+      : properties.street,
+    properties.district,
+    properties.city || properties.locality,
+    properties.county,
+    properties.state,
+    properties.country,
+  ].filter(Boolean);
+  return [...new Set(parts)].join(", ");
+}
 
 function MapClickHandler({ onSelect }) {
   useMapEvents({
@@ -82,32 +98,51 @@ export default function LeafletPinPicker({ location, onSelect }) {
       }
       const waitMs = 1_100 - (Date.now() - lastLocationSearchAt);
       if (waitMs > 0) await new Promise((resolve) => window.setTimeout(resolve, waitMs));
-      // Search runs only on submit (not on every keystroke) to avoid excessive
-      // requests to the community OpenStreetMap geocoder.
+      // Search runs only on submit, and this client-wide delay and cache keep
+      // repeat requests to the free community geocoder low.
       const params = new URLSearchParams({
-        q: `${term}, Ghana`,
-        format: "jsonv2",
-        countrycodes: "gh",
+        q: term,
+        countrycode: "GH",
+        bbox: GHANA_BBOX,
+        lat: String((4.5 + 11.5) / 2),
+        lon: String((-3.5 + 1.5) / 2),
+        lang: "en",
         limit: "5",
-        addressdetails: "1",
       });
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
-        headers: { Accept: "application/json" },
-        signal: AbortSignal.timeout(10_000),
-      });
-      if (!response.ok) throw new Error("Location search is temporarily unavailable.");
-      const data = await response.json();
-      const places = Array.isArray(data) ? data.filter((place) => {
-        const lat = Number(place.lat);
-        const lng = Number(place.lon);
-        return Number.isFinite(lat) && Number.isFinite(lng) && lat >= 4.5 && lat <= 11.5 && lng >= -3.5 && lng <= 1.5;
-      }) : [];
       lastLocationSearchAt = Date.now();
+      const response = await fetch(`https://photon.komoot.io/api/?${params}`, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(12_000),
+      });
+      if (response.status === 429) throw new Error("Location search is busy. Please wait a moment and try again.");
+      if (!response.ok) throw new Error("Location search is temporarily unavailable. You can still place the pin on the map.");
+      const data = await response.json();
+      const places = Array.isArray(data?.features) ? data.features.flatMap((feature) => {
+        const [lng, lat] = feature?.geometry?.coordinates || [];
+        const properties = feature?.properties || {};
+        const displayName = formatPlaceName(properties);
+        if (
+          !displayName ||
+          properties.countrycode?.toUpperCase() !== "GH" ||
+          !Number.isFinite(Number(lat)) ||
+          !Number.isFinite(Number(lng)) ||
+          Number(lat) < 4.5 || Number(lat) > 11.5 ||
+          Number(lng) < -3.5 || Number(lng) > 1.5
+        ) return [];
+        return [{
+          place_id: `${properties.osm_type || "place"}-${properties.osm_id || `${lat}-${lng}`}`,
+          lat: Number(lat),
+          lon: Number(lng),
+          display_name: displayName,
+        }];
+      }) : [];
       locationSearchCache.set(cacheKey, places);
       setResults(places);
       if (!places.length) setSearchError("No places found in Ghana. Try a nearby town or landmark.");
     } catch (error) {
-      setSearchError(error?.name === "TimeoutError" ? "Location search timed out. Please try again." : error.message || "Location search is temporarily unavailable.");
+      setSearchError(error?.name === "TimeoutError" || error?.name === "AbortError"
+        ? "Location search timed out. Please try again. You can still place the pin on the map."
+        : error.message || "Location search is temporarily unavailable. You can still place the pin on the map.");
     } finally {
       setSearching(false);
     }
@@ -150,7 +185,7 @@ export default function LeafletPinPicker({ location, onSelect }) {
           <span className="hidden sm:inline">Search</span>
         </button>
       </form>
-      <p className="border-b border-border bg-white px-3 pb-2 text-[11px] text-muted-foreground">Search a place, then tap the map to fine-tune your pin.</p>
+      <p className="border-b border-border bg-white px-3 pb-2 text-[11px] text-muted-foreground">Search a Ghana town, area or landmark, then fine-tune the pin. Map data © OpenStreetMap contributors.</p>
       {searchError && <p role="status" className="bg-white px-3 py-2 text-xs text-muted-foreground">{searchError}</p>}
       {results.length > 0 && (
         <ul aria-label="Location search results" className="relative z-10 max-h-44 overflow-y-auto border-b border-border bg-white">
