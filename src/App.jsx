@@ -199,6 +199,15 @@ function AppRoutes() {
       />
 
       <Route
+        path="/admin/pre-orders"
+        element={
+          <AdminProtectedRoute>
+            <AdminOrders preordersOnly />
+          </AdminProtectedRoute>
+        }
+      />
+
+      <Route
         path="/admin/reviews"
         element={
           <AdminProtectedRoute>
