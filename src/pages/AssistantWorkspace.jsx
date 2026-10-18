@@ -24,6 +24,15 @@ const ORDER_STATUSES = [
   { value: "out_for_delivery", label: "Out for delivery" },
   { value: "delivered", label: "Delivered" },
 ];
+const PREORDER_STATUSES = [
+  { value: "pending", label: "Received" },
+  { value: "confirmed", label: "Confirmed" },
+  { value: "sourcing", label: "Sourcing from UK" },
+  { value: "shipped", label: "Shipped to Ghana" },
+  { value: "received", label: "Arrived in Ghana" },
+  { value: "delivered", label: "Delivered" },
+  { value: "cancelled", label: "Cancelled" },
+];
 
 function dateLabel(value) {
   if (!value) return "—";
@@ -109,7 +118,7 @@ export default function AssistantWorkspace() {
 
       let { data: orderItems, error: itemsError } = await supabase
         .from("order_items")
-        .select("id,order_id,product_name_snapshot,quantity,is_preorder")
+        .select("id,order_id,product_name_snapshot,quantity,is_preorder,preorder_status")
         .in("order_id", nextOrders.map((order) => order.id));
       if (itemsError && String(itemsError.message || "").toLowerCase().includes("is_preorder")) {
         setPreorderSetupMissing(true);
@@ -157,6 +166,33 @@ export default function AssistantWorkspace() {
       setSuccess(`Order ${order.order_number} updated to ${statusLabel(updatedStatus).toLowerCase()}.`);
     } catch (updateError) {
       setError(updateError?.message || "Could not update the order status.");
+    } finally {
+      setUpdating(null);
+    }
+  }
+
+  async function updatePreorderStatus(order, item, status) {
+    if (updating || status === item.preorder_status) return;
+    setUpdating(item.id);
+    setError("");
+    setSuccess("");
+    try {
+      const { data, error: updateError } = await supabase.rpc("update_staff_preorder_status", {
+        p_order_item_id: item.id,
+        p_status: status,
+      });
+      if (updateError) throw updateError;
+      if (!data?.ok) throw new Error(data?.error || "The pre-order status was not updated.");
+      setItemsByOrder((current) => ({
+        ...current,
+        [order.id]: (current[order.id] || []).map((line) => line.id === item.id
+          ? { ...line, preorder_status: data.status || status }
+          : line),
+      }));
+      const label = PREORDER_STATUSES.find((entry) => entry.value === (data.status || status))?.label || status;
+      setSuccess(`${item.product_name_snapshot} pre-order updated to ${label.toLowerCase()}.`);
+    } catch (updateError) {
+      setError(updateError?.message || "Could not update the pre-order status.");
     } finally {
       setUpdating(null);
     }
@@ -347,7 +383,15 @@ export default function AssistantWorkspace() {
                                     <div key={item.id} className="flex items-center justify-between gap-4 border-b border-black/[0.06] px-4 py-4 last:border-b-0">
                                       <div>
                                         <p className="font-semibold">{item.product_name_snapshot || "Item"}</p>
-                                        {item.is_preorder && <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">Pre-order · Ships from UK</span>}
+                                        {item.is_preorder && <>
+                                          <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">Pre-order · Ships from UK</span>
+                                          <label className="mt-2 flex max-w-xs items-center gap-2 text-xs font-medium text-black/50">
+                                            <span className="shrink-0">Progress</span>
+                                            <select value={item.preorder_status || "pending"} onChange={(event) => void updatePreorderStatus(order, item, event.target.value)} disabled={Boolean(updating)} className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white px-2 py-1.5 text-xs font-semibold text-black outline-none focus:border-[#ff1f8f] disabled:opacity-60">
+                                              {PREORDER_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
+                                            </select>
+                                          </label>
+                                        </>}
                                       </div>
                                       <p className="shrink-0 text-sm text-black/55">× {item.quantity}</p>
                                     </div>
@@ -356,6 +400,7 @@ export default function AssistantWorkspace() {
                               </div>
 
                               <div className="mt-6 grid gap-4 md:grid-cols-2">
+                                {orderView !== "preorders" && (
                                 <ControlCard label="Order status">
                                   <select
                                     value={order.order_status || "pending"}
@@ -367,6 +412,7 @@ export default function AssistantWorkspace() {
                                     {ORDER_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
                                   </select>
                                 </ControlCard>
+                                )}
                                 <ControlCard label="Assigned permissions">
                                   <div className="flex min-h-12 items-center gap-2 rounded-xl border border-black/10 bg-[#fafafa] px-4 py-3 text-sm text-black/60"><ShoppingBag className="h-4 w-4 text-[#ff1f8f]" />View orders and update delivery status</div>
                                 </ControlCard>

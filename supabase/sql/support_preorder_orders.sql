@@ -3,6 +3,53 @@
 -- preorder flag against live stock and enforces the five-unit preorder limit.
 alter table public.order_items
   add column if not exists is_preorder boolean not null default false;
+alter table public.order_items
+  add column if not exists preorder_status text not null default 'pending'
+  check (preorder_status in ('pending', 'confirmed', 'sourcing', 'shipped', 'received', 'delivered', 'cancelled'));
+
+-- Staff update a preorder line independently from the delivery status of any
+-- in-stock products in the same checkout.
+create or replace function public.update_staff_preorder_status(
+  p_order_item_id uuid,
+  p_status text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $function$
+declare
+  v_role text;
+  v_item public.order_items%rowtype;
+begin
+  select au.role into v_role
+  from public.admin_users au
+  where au.user_id = (select auth.uid());
+  if v_role is null or v_role not in ('admin', 'assistant') then
+    raise exception 'Store staff access is required' using errcode = '42501';
+  end if;
+  if p_status is null or p_status not in (
+    'pending', 'confirmed', 'sourcing', 'shipped', 'received', 'delivered', 'cancelled'
+  ) then
+    raise exception 'Invalid pre-order status' using errcode = '22023';
+  end if;
+  update public.order_items
+    set preorder_status = p_status
+    where id = p_order_item_id and is_preorder is true
+    returning * into v_item;
+  if not found then
+    raise exception 'Pre-order item not found' using errcode = 'P0002';
+  end if;
+  return jsonb_build_object(
+    'ok', true,
+    'id', v_item.id,
+    'status', v_item.preorder_status,
+    'updated_at', now()
+  );
+end;
+$function$;
+revoke all on function public.update_staff_preorder_status(uuid, text) from public, anon;
+grant execute on function public.update_staff_preorder_status(uuid, text) to authenticated;
 
 create or replace function public.create_order_with_momo(
   p_customer_name text,

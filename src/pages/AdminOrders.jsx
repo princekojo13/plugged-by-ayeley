@@ -22,6 +22,15 @@ const STATUSES = [
   { value: "delivered", label: "Delivered" },
   { value: "cancelled", label: "Cancelled" },
 ];
+const PREORDER_STATUSES = [
+  { value: "pending", label: "Received" },
+  { value: "confirmed", label: "Confirmed" },
+  { value: "sourcing", label: "Sourcing from UK" },
+  { value: "shipped", label: "Shipped to Ghana" },
+  { value: "received", label: "Arrived in Ghana" },
+  { value: "delivered", label: "Delivered" },
+  { value: "cancelled", label: "Cancelled" },
+];
 
 function formatGhs(value) {
   return new Intl.NumberFormat("en-GH", {
@@ -162,6 +171,7 @@ export default function AdminOrders({ preordersOnly = false }) {
             quantity,
             line_total,
             is_preorder,
+            preorder_status,
             created_at
           )
         `;
@@ -177,7 +187,7 @@ export default function AdminOrders({ preordersOnly = false }) {
         }
         const fallback = await supabase
           .from("orders")
-          .select(orderSelection.replace(/is_preorder,\s*/, ""))
+          .select(orderSelection.replace(/is_preorder,\s*preorder_status,\s*/, ""))
           .order("created_at", { ascending: false });
         data = fallback.data;
         queryError = fallback.error;
@@ -288,6 +298,37 @@ export default function AdminOrders({ preordersOnly = false }) {
         err?.message ||
           "Could not update the order status."
       );
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const updatePreorderStatus = async (order, item, status) => {
+    if (updating === item.id || status === item.preorder_status) return;
+    setUpdating(item.id);
+    setError("");
+    try {
+      const { data, error: updateError } = await supabase.rpc(
+        "update_staff_preorder_status",
+        { p_order_item_id: item.id, p_status: status }
+      );
+      if (updateError) throw updateError;
+      if (!data?.ok) throw new Error(data?.error || "The pre-order status was not updated.");
+      const applyUpdate = (current) => current.map((entry) => entry.id === order.id
+        ? { ...entry, order_items: entry.order_items.map((line) => line.id === item.id ? { ...line, preorder_status: data.status || status } : line) }
+        : entry);
+      setOrders(applyUpdate);
+      setSelectedOrder((current) => current?.id === order.id
+        ? { ...current, order_items: current.order_items.map((line) => line.id === item.id ? { ...line, preorder_status: data.status || status } : line) }
+        : current);
+      toast({
+        variant: "success",
+        title: "Pre-order status updated",
+        description: `${item.product_name} is now ${PREORDER_STATUSES.find((entry) => entry.value === (data.status || status))?.label.toLowerCase()}.`,
+      });
+    } catch (err) {
+      console.error("Failed to update pre-order status:", err);
+      setError(err?.message || "Could not update pre-order status.");
     } finally {
       setUpdating(null);
     }
@@ -842,6 +883,19 @@ export default function AdminOrders({ preordersOnly = false }) {
                                             Pre-order
                                           </span>
                                         )}
+                                        {preordersOnly && (
+                                          <label className="mt-2 flex max-w-xs items-center gap-2 text-xs font-medium text-black/55">
+                                            <span className="shrink-0">Pre-order progress</span>
+                                            <select
+                                              value={item.preorder_status || "pending"}
+                                              onChange={(event) => updatePreorderStatus(order, item, event.target.value)}
+                                              disabled={updating === item.id}
+                                              className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white px-2 py-1.5 text-xs font-semibold text-black outline-none focus:border-[#ff1f8f] disabled:opacity-60"
+                                            >
+                                              {PREORDER_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
+                                            </select>
+                                          </label>
+                                        )}
 
                                         <p className="mt-1 text-xs text-black/40">
                                           {formatGhs(
@@ -936,6 +990,7 @@ export default function AdminOrders({ preordersOnly = false }) {
                         </div>
 
                         <div className="mt-6 grid gap-4 md:grid-cols-2">
+                          {!preordersOnly && (
                           <ControlCard label="Order Status">
                             <select
                               value={order.status}
@@ -962,6 +1017,7 @@ export default function AdminOrders({ preordersOnly = false }) {
                               )}
                             </select>
                           </ControlCard>
+                          )}
 
                           <ControlCard label="Payment Status">
                             <div className="flex min-h-[48px] flex-wrap items-center justify-between gap-3 rounded-xl border border-black/10 bg-[#fafafa] px-4 py-3">
