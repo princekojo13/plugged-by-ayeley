@@ -579,6 +579,12 @@ export default function Checkout() {
             Thank you, {placedOrder.full_name}.
           </p>
 
+          {placedOrder.has_preorder && (
+            <p className="mt-5 border border-amber-200 bg-amber-50 p-4 text-left text-sm text-amber-900">
+              Your order includes an out-of-stock pre-order. We’ve saved it with your order and will contact you with delivery timing when it is available.
+            </p>
+          )}
+
           {placedOrder.payment_method === PAYMENT_METHODS.moolre && (
             <div className="mt-5 border border-pink/20 bg-pink/5 p-4 text-left text-sm text-carbon">
               {placedOrder.payment_status === "paid" ? "Moolre confirmed your payment." : "A Mobile Money request has been sent. Approve it on your phone, then check the payment status here."}

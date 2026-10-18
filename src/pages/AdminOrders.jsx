@@ -151,6 +151,7 @@ export default function AdminOrders() {
             unit_price:product_price_snapshot,
             quantity,
             line_total,
+            is_preorder,
             created_at
           )
         `)
@@ -790,6 +791,11 @@ export default function AdminOrders() {
                                         <p className="font-semibold">
                                           {item.product_name}
                                         </p>
+                                        {item.is_preorder && (
+                                          <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-amber-700">
+                                            Pre-order
+                                          </span>
+                                        )}
 
                                         <p className="mt-1 text-xs text-black/40">
                                           {formatGhs(
