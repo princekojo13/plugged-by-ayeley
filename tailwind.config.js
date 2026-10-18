@@ -45,9 +45,9 @@ module.exports = {
   			input: 'hsl(var(--input))',
   			ring: 'hsl(var(--ring))',
   			pink: {
-  				DEFAULT: 'hsl(327 100% 50%)',
-  				light: 'hsl(327 100% 70%)',
-  				dark: 'hsl(327 80% 40%)'
+				DEFAULT: 'hsl(var(--accent))',
+				light: 'hsl(333 100% 70%)',
+				dark: 'hsl(333 80% 40%)'
   			},
   			carbon: '#0A0A0A',
   			london: '#F2F2F2'

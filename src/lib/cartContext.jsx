@@ -51,8 +51,26 @@ export function CartProvider({ children }) {
     if (quantity < 1) return;
     setItems((prev) => prev.map((i) => {
       if (i.product_id !== productId) return i;
-      const max = i.preorder ? PREORDER_MAX : (typeof i.stock === "number" ? i.stock : Infinity);
-      return { ...i, quantity: Math.min(quantity, max) };
+      const preorder = i.preorder || typeof i.stock === "number" && i.stock <= 0;
+      const max = preorder ? PREORDER_MAX : (typeof i.stock === "number" ? i.stock : Infinity);
+      return { ...i, preorder, quantity: Math.min(quantity, max) };
+    }));
+  }, []);
+
+  const refreshProductAvailability = useCallback((products) => {
+    const byId = new Map(products.map((product) => [product.id, product]));
+    setItems((prev) => prev.map((item) => {
+      const product = byId.get(item.product_id);
+      if (!product) return item;
+      const stock = Math.max(0, Number(product.stock_quantity ?? 0));
+      const preorder = stock === 0;
+      const max = preorder ? PREORDER_MAX : stock;
+      return {
+        ...item,
+        stock,
+        preorder,
+        quantity: Math.max(1, Math.min(item.quantity, max)),
+      };
     }));
   }, []);
 
@@ -67,7 +85,7 @@ export function CartProvider({ children }) {
 
   return (
     <CartContext.Provider
-      value={{ items, addToCart, updateQuantity, removeFromCart, clearCart, subtotal, totalItems }}
+      value={{ items, addToCart, updateQuantity, refreshProductAvailability, removeFromCart, clearCart, subtotal, totalItems }}
     >
       {children}
     </CartContext.Provider>

@@ -364,7 +364,7 @@ export default function Shop() {
                 </p>
               </div>
             ) : loading ? (
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6">
+              <div className="grid grid-cols-3 gap-2 sm:gap-6">
                 {Array.from({ length: 9 }).map(
                   (_, index) => (
                     <div
@@ -404,7 +404,7 @@ export default function Shop() {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6">
+              <div className="grid grid-cols-3 gap-2 sm:gap-6">
                 {filteredProducts.map((product) => (
                   <ProductCard
                     key={product.id}

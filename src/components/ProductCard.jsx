@@ -63,37 +63,37 @@ export default function ProductCard({ product }) {
               </span>
             )}
             {isPreorder && (
-              <span className="bg-carbon text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-1">
-                Ships from UK
+              <span className="bg-pink text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-1">
+                Out of stock · Pre-order
               </span>
             )}
           </div>
         </div>
 
-        <div className="p-4 flex flex-col flex-1">
+        <div className="p-2.5 sm:p-4 flex flex-col flex-1">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">{product.category}</p>
-          <h3 className="font-heading font-semibold text-sm text-carbon leading-snug line-clamp-2 mb-2 group-hover:text-pink transition-colors">
+          <h3 className="font-heading font-semibold text-xs sm:text-sm text-carbon leading-snug line-clamp-2 mb-2 group-hover:text-pink transition-colors">
             {product.name}
           </h3>
           <div className="flex items-baseline gap-2 mt-auto mb-3">
-            <span className="font-heading font-bold text-lg text-carbon">₵{effectivePrice.toFixed(2)}</span>
+            <span className="font-heading font-bold text-sm sm:text-lg text-carbon">₵{effectivePrice.toFixed(2)}</span>
             {onSale && (
               <span className="text-sm text-muted-foreground line-through">₵{compareAtPrice.toFixed(2)}</span>
             )}
           </div>
         </div>
         </Link>
-        <div className="px-4 pb-4">
+        <div className="px-2.5 pb-2.5 sm:px-4 sm:pb-4">
           <button
             type="button"
             onClick={openModal}
             className={cn(
-              "w-full py-2.5 text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2",
+              "w-full min-h-10 py-2 text-[10px] sm:text-xs font-bold uppercase tracking-wide sm:tracking-wider transition-colors flex items-center justify-center gap-1 sm:gap-2",
               inStock ? "bg-carbon text-white hover:bg-pink" : "bg-pink text-white hover:bg-carbon"
             )}
           >
             <ShoppingBag className="w-3.5 h-3.5" />
-            {inStock ? "Add to Cart" : "Order"}
+            {inStock ? "Add to Cart" : "Pre-order"}
           </button>
         </div>
       </article>
@@ -102,7 +102,7 @@ export default function ProductCard({ product }) {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-heading text-carbon">
-              {inStock ? "Add to Cart" : "Order"}
+              {inStock ? "Add to Cart" : "Pre-order"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
@@ -117,7 +117,7 @@ export default function ProductCard({ product }) {
             </div>
             {isPreorder && (
               <div className="bg-pink/5 border-l-4 border-pink p-3 text-xs text-muted-foreground">
-                This item is in stock.
+                This item is currently out of stock. Place a pre-order and we’ll contact you with the expected delivery timing.
               </div>
             )}
             <div>
@@ -152,7 +152,7 @@ export default function ProductCard({ product }) {
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button onClick={confirmAdd} className="bg-pink text-white hover:bg-carbon">
-              {inStock ? "Add to Cart" : "Confirm Order"}
+              {inStock ? "Add to Cart" : "Confirm Pre-order"}
             </Button>
           </DialogFooter>
         </DialogContent>

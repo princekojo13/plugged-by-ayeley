@@ -580,7 +580,7 @@ export default function Checkout() {
           </p>
 
           {placedOrder.payment_method === PAYMENT_METHODS.moolre && (
-            <div className="mt-5 border border-blue-200 bg-blue-50 p-4 text-left text-sm text-blue-950">
+            <div className="mt-5 border border-pink/20 bg-pink/5 p-4 text-left text-sm text-carbon">
               {placedOrder.payment_status === "paid" ? "Moolre confirmed your payment." : "A Mobile Money request has been sent. Approve it on your phone, then check the payment status here."}
               {moolreOtpRequired && <div className="mt-3 flex gap-2"><input aria-label="Mobile Money verification code" inputMode="numeric" autoComplete="one-time-code" maxLength={12} className="min-w-0 flex-1 rounded border border-blue-200 px-3 py-2" placeholder="SMS verification code" value={moolreOtp} onChange={(event) => setMoolreOtp(event.target.value)} /><button type="button" disabled={!moolreOtp.trim()} onClick={() => submitMoolreOtp().catch((error) => setError(error.message))} className="rounded bg-carbon px-4 py-2 font-bold text-white disabled:opacity-50">Verify</button></div>}
               {!moolreOtpRequired && placedOrder.payment_status !== "paid" && <button type="button" onClick={() => checkMoolrePayment().catch((error) => setError(error.message))} className="mt-3 rounded bg-carbon px-4 py-2 font-bold text-white">Check payment status</button>}

@@ -6,13 +6,25 @@ const json = (body: Record<string, unknown>, status = 200, origin: string | null
 const record = (value: unknown) => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const text = (value: unknown, max = 160) => typeof value === "string" ? value.trim().slice(0, max) : "";
 const digits = (value: string) => value.replace(/\D/g, "");
+const hashRateKey = async (salt: string, orderNumber: string, phone: string) => {
+  const bytes = new TextEncoder().encode(`${salt}:${orderNumber.toUpperCase()}:${digits(phone)}`);
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  return [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+};
 
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": origin && origins.has(origin) ? origin : "null", "Access-Control-Allow-Headers": "authorization, apikey, x-client-info, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS", Vary: "Origin" } });
   if (req.method !== "POST" || origin && !origins.has(origin)) return json({ success: false, error: "Forbidden request." }, 403, origin);
   try {
-    const body = record(await req.json());
+    const rawBody = await req.text();
+    if (new TextEncoder().encode(rawBody).length > 8_192) return json({ success: false, error: "Request is too large." }, 413, origin);
+    let body: Record<string, unknown>;
+    try {
+      body = record(JSON.parse(rawBody));
+    } catch {
+      return json({ success: false, error: "Invalid request body." }, 400, origin);
+    }
     const action = text(body.action, 16);
     const orderNumber = text(body.order_number, 80);
     const phone = text(body.phone, 30);
@@ -34,6 +46,19 @@ Deno.serve(async (req) => {
     }
     if (!order.moolre_reference) return json({ success: false, error: "This order has no Moolre payment reference." }, 409, origin);
     if (order.payment_status === "paid") return json({ success: true, payment_status: "paid", order_number: order.order_number }, 200, origin);
+    if (order.order_status === "cancelled") return json({ success: false, error: "This order was cancelled. Contact the store if you need help." }, 409, origin);
+
+    const rateKey = await hashRateKey(serviceRoleKey, order.order_number, phone);
+    const { data: allowed, error: rateError } = await db.rpc("consume_customer_order_lookup", {
+      p_keys: [rateKey],
+      p_max_attempts: 15,
+      p_window_seconds: 900,
+    });
+    if (rateError) {
+      console.error("Moolre payment rate check failed:", rateError.message);
+      return json({ success: false, error: "Payment status is temporarily unavailable. Please try again later." }, 503, origin);
+    }
+    if (allowed !== true) return json({ success: false, error: "Too many payment checks. Please wait 15 minutes and try again." }, 429, origin);
 
     const base = Deno.env.get("MOOLRE_BASE_URL")?.replace(/\/$/, "") || "https://api.moolre.com";
     const headers = { "X-API-USER": apiUser, "X-API-PUBKEY": apiKey, "Content-Type": "application/json" };

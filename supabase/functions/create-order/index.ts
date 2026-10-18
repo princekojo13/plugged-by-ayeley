@@ -112,7 +112,7 @@ async function createOrderQuote(
 
   const productIds = [...quantities.keys()];
   const [productsResult, settingsResult] = await Promise.all([
-    db.from("products").select("id,price").in("id", productIds).eq("active", true),
+    db.from("products").select("id,price,stock_quantity").in("id", productIds).eq("active", true),
     db.from("store_settings").select("max_delivery_distance_km").eq("id", true).maybeSingle(),
   ]);
 
@@ -124,6 +124,17 @@ async function createOrderQuote(
   const products = productsResult.data || [];
   if (products.length !== productIds.length) {
     return respond({ success: false, error: "One or more items are no longer available. Refresh your cart and try again." }, 409, headers);
+  }
+
+  for (const product of products) {
+    const quantity = quantities.get(product.id) || 0;
+    const stock = Math.max(0, Number(product.stock_quantity) || 0);
+    if (stock > 0 && quantity > stock) {
+      return respond({ success: false, error: "Your cart quantity exceeds the available stock. Please update your cart." }, 409, headers);
+    }
+    if (stock === 0 && quantity > 5) {
+      return respond({ success: false, error: "Pre-orders are limited to 5 of each out-of-stock product." }, 409, headers);
+    }
   }
 
   const priceById = new Map(products.map((product) => [product.id, Number(product.price)]));
@@ -297,6 +308,7 @@ Deno.serve(async (req: Request) => {
       return {
         product_id: text(item.product_id ?? item.productId ?? item.id, 40),
         quantity: number(item.quantity ?? item.qty),
+        preorder: false,
       };
     });
 
@@ -325,7 +337,7 @@ Deno.serve(async (req: Request) => {
     const requestedProductIds = [...new Set(items.map((item) => item.product_id))];
     const { data: activeProducts, error: productError } = await db
       .from("products")
-      .select("id")
+      .select("id,stock_quantity")
       .in("id", requestedProductIds)
       .eq("active", true);
     if (productError) {
@@ -340,6 +352,19 @@ Deno.serve(async (req: Request) => {
         409,
         headers,
       );
+    }
+
+    const productsById = new Map((activeProducts || []).map((product) => [product.id, product]));
+    for (const item of items) {
+      const stock = Math.max(0, Number(productsById.get(item.product_id)?.stock_quantity) || 0);
+      if (stock > 0 && item.quantity > stock) {
+        return respond({ success: false, error: "Your cart quantity exceeds the available stock. Please update your cart." }, 409, headers);
+      }
+      if (stock === 0 && item.quantity > 5) {
+        return respond({ success: false, error: "Pre-orders are limited to 5 of each out-of-stock product." }, 409, headers);
+      }
+      // Recompute this flag from live stock. Never trust a preorder flag sent by the browser.
+      item.preorder = stock === 0;
     }
 
     const { data: settings, error: settingsError } = await db

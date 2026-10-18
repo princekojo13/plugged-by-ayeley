@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useProducts } from "@/lib/useProducts";
 
 export default function Cart() {
-  const { items, updateQuantity, removeFromCart, subtotal } = useCart();
+  const { items, updateQuantity, refreshProductAvailability, removeFromCart, subtotal } = useCart();
   const { products: availableProducts, loading: productsLoading } = useProducts({ limit: 1 });
   const [availabilityNotice, setAvailabilityNotice] = useState("");
   const [availabilityStatus, setAvailabilityStatus] = useState(
@@ -32,7 +32,7 @@ export default function Cart() {
     const checkAvailability = async () => {
       const { data, error } = await supabase
         .from("products")
-        .select("id")
+        .select("id,stock_quantity")
         .in("id", productIds)
         .eq("active", true);
 
@@ -52,6 +52,7 @@ export default function Cart() {
             : "Items that are no longer available were removed from your cart."
         );
       }
+      refreshProductAvailability(data || []);
       setAvailabilityStatus("ready");
     };
 
@@ -59,7 +60,7 @@ export default function Cart() {
     return () => {
       isCurrent = false;
     };
-  }, [productIdsKey, removeFromCart]);
+  }, [productIdsKey, refreshProductAvailability, removeFromCart]);
 
   if (items.length === 0) {
     return (

@@ -17,13 +17,13 @@
     --secondary-foreground: 0 0% 4%;
     --muted: 0 0% 95%;
     --muted-foreground: 0 0% 40%;
-    --accent: 327 100% 50%;
+    --accent: 333 100% 56%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
     --border: 0 0% 90%;
     --input: 0 0% 90%;
-    --ring: 327 100% 50%;
+    --ring: 333 100% 56%;
     --radius: 0.25rem;
 
     --font-heading: 'Playfair Display', Georgia, serif;
@@ -45,13 +45,13 @@
     --secondary-foreground: 0 0% 98%;
     --muted: 0 0% 12%;
     --muted-foreground: 0 0% 64%;
-    --accent: 327 100% 50%;
+    --accent: 333 100% 56%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 62% 50%;
     --destructive-foreground: 0 0% 98%;
     --border: 0 0% 14%;
     --input: 0 0% 14%;
-    --ring: 327 100% 50%;
+    --ring: 333 100% 56%;
   }
 }
 
@@ -153,8 +153,8 @@
 }
 
 .ck-input:focus {
-  border-color: hsl(327 100% 50%);
-  box-shadow: 0 0 0 2px hsl(327 100% 50% / 0.2);
+  border-color: hsl(var(--accent));
+  box-shadow: 0 0 0 2px hsl(var(--accent) / 0.2);
 }
 
 .ck-input::placeholder {
@@ -184,8 +184,8 @@
 }
 
 .admin-input:focus {
-  border-color: #b10b46;
-  box-shadow: 0 0 0 3px rgba(177, 11, 70, 0.12);
+  border-color: hsl(var(--accent));
+  box-shadow: 0 0 0 3px hsl(var(--accent) / 0.14);
 }
 
 .admin-input:disabled {
