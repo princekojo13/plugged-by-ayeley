@@ -102,6 +102,14 @@ function AdminOrderNotificationListener() {
   return null;
 }
 
+function AssistantOrderNotificationListener() {
+  useAdminOrderNotifications({
+    includeCatalogAlerts: false,
+    channelName: "assistant-order-notifications",
+  });
+  return null;
+}
+
 function AssistantProtectedRoute({ children }) {
   const { loading, isAuthenticated, isAssistant } = useAuth();
   const location = useLocation();
@@ -110,7 +118,12 @@ function AssistantProtectedRoute({ children }) {
   if (!isAuthenticated || !isAssistant) {
     return <Navigate to="/admin-login" replace state={{ from: location.pathname }} />;
   }
-  return children;
+  return (
+    <>
+      <AssistantOrderNotificationListener />
+      {children}
+    </>
+  );
 }
 
 function AppRoutes() {

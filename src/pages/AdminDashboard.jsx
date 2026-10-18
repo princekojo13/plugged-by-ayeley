@@ -3,8 +3,6 @@ import { Link } from "react-router-dom";
 import {
   ArrowUpRight,
   BarChart3,
-  BellOff,
-  BellRing,
   Clock3,
   CreditCard,
   LogOut,
@@ -17,6 +15,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
+import NotificationsToggle from "@/components/admin/NotificationsToggle";
 
 function formatGhs(value) {
   return new Intl.NumberFormat("en-GH", {
@@ -75,8 +74,6 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [notificationPermission, setNotificationPermission] = useState("default");
 
   const loadDashboard = useCallback(
     async (manual = false) => {
@@ -153,37 +150,11 @@ export default function AdminDashboard() {
   }, [loadDashboard]);
 
   useEffect(() => {
-    try {
-      setNotificationsEnabled(window.localStorage.getItem("admin-notifications-enabled") !== "false");
-    } catch {
-      setNotificationsEnabled(true);
-    }
-    if ("Notification" in window) setNotificationPermission(window.Notification.permission);
     const refreshDashboard = () => void loadDashboard(true);
     const eventNames = ["admin:order-inserted", "admin:product-updated", "admin:review-inserted"];
     eventNames.forEach((eventName) => window.addEventListener(eventName, refreshDashboard));
     return () => eventNames.forEach((eventName) => window.removeEventListener(eventName, refreshDashboard));
   }, [loadDashboard]);
-
-  const toggleNotifications = async () => {
-    const enabled = !notificationsEnabled;
-    setNotificationsEnabled(enabled);
-    try {
-      window.localStorage.setItem("admin-notifications-enabled", String(enabled));
-    } catch {
-      // Keep the current-session toggle working if browser storage is unavailable.
-    }
-
-    // Ask for desktop permission from this user gesture, while keeping the
-    // in-app alert toggle useful if permission is denied or unavailable.
-    if (enabled && "Notification" in window && window.Notification.permission === "default") {
-      try {
-        setNotificationPermission(await window.Notification.requestPermission());
-      } catch {
-        setNotificationPermission(window.Notification.permission);
-      }
-    }
-  };
 
   const paidValue = orders
     .filter((order) => order.payment_status === "paid")
@@ -236,24 +207,7 @@ export default function AdminDashboard() {
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={toggleNotifications}
-                aria-pressed={notificationsEnabled}
-                className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
-                  notificationsEnabled
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-300"
-                    : "border-black/10 bg-white text-black/60 hover:border-[#ff1f8f] hover:text-[#ff1f8f]"
-                }`}
-                title={notificationsEnabled
-                  ? "Turn off order, stock, and review alerts"
-                  : notificationPermission === "denied"
-                    ? "Turn on in-app alerts; browser alerts are blocked in your browser settings"
-                    : "Turn on order, stock, and review alerts"}
-              >
-                {notificationsEnabled ? <BellRing className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
-                Notifications {notificationsEnabled ? "on" : "off"}
-              </button>
+              <NotificationsToggle />
               <button
                 type="button"
                 onClick={() => void logout()}

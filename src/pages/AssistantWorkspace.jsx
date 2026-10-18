@@ -13,6 +13,7 @@ import {
 import { useAuth } from "@/lib/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
 import WhatsAppIcon from "@/components/WhatsAppIcon";
+import NotificationsToggle from "@/components/admin/NotificationsToggle";
 import { whatsappLink } from "@/lib/useStoreSettings";
 
 const ORDER_STATUSES = [
@@ -176,6 +177,7 @@ export default function AssistantWorkspace() {
               <p className="mt-1 text-sm text-black/45">Signed in as {user?.email || "assistant"} · View orders and update delivery status.</p>
             </div>
             <div className="flex items-center gap-2">
+              <NotificationsToggle alertScope="new order" />
               <button type="button" onClick={() => void loadOrders(true)} disabled={loading || refreshing} className="inline-flex items-center gap-2 rounded-xl border border-black/10 bg-white px-4 py-2.5 text-sm font-semibold transition hover:border-[#ff1f8f] hover:text-[#ff1f8f] disabled:cursor-not-allowed disabled:opacity-50">
                 <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />Refresh
               </button>
