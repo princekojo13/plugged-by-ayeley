@@ -2,20 +2,31 @@ import { useEffect } from "react";
 import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 
+const NOTIFICATIONS_STORAGE_KEY = "admin-notifications-enabled";
+
 function notifyAdmin(title, description, eventName, detail) {
-  toast({ title, description });
-
-  if (typeof window === "undefined") return;
-
-  if ("Notification" in window && window.Notification.permission === "granted") {
+  if (typeof window !== "undefined") {
+    let notificationsEnabled = true;
     try {
-      new window.Notification(title, { body: description });
+      notificationsEnabled = window.localStorage.getItem(NOTIFICATIONS_STORAGE_KEY) !== "false";
     } catch {
-      // Keep the in-app notification if desktop notifications are blocked.
+      // Keep alerts enabled if browser storage is unavailable.
+    }
+
+    if (notificationsEnabled) {
+      toast({ title, description });
+
+      if ("Notification" in window && window.Notification.permission === "granted") {
+        try {
+          new window.Notification(title, { body: description });
+        } catch {
+          // Keep the in-app notification if desktop notifications are blocked.
+        }
+      }
     }
   }
 
-  if (eventName) {
+  if (typeof window !== "undefined" && eventName) {
     window.dispatchEvent(new CustomEvent(eventName, { detail }));
   }
 }

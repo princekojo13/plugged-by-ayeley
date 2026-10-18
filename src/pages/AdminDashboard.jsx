@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import {
   ArrowUpRight,
   BarChart3,
+  BellOff,
   BellRing,
   Clock3,
   CreditCard,
@@ -74,6 +75,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [notificationPermission, setNotificationPermission] = useState("default");
 
   const loadDashboard = useCallback(
@@ -151,6 +153,11 @@ export default function AdminDashboard() {
   }, [loadDashboard]);
 
   useEffect(() => {
+    try {
+      setNotificationsEnabled(window.localStorage.getItem("admin-notifications-enabled") !== "false");
+    } catch {
+      setNotificationsEnabled(true);
+    }
     if ("Notification" in window) setNotificationPermission(window.Notification.permission);
     const refreshDashboard = () => void loadDashboard(true);
     const eventNames = ["admin:order-inserted", "admin:product-updated", "admin:review-inserted"];
@@ -162,6 +169,16 @@ export default function AdminDashboard() {
     if (!("Notification" in window)) return;
     const permission = await window.Notification.requestPermission();
     setNotificationPermission(permission);
+  };
+
+  const toggleNotifications = () => {
+    const enabled = !notificationsEnabled;
+    setNotificationsEnabled(enabled);
+    try {
+      window.localStorage.setItem("admin-notifications-enabled", String(enabled));
+    } catch {
+      // Keep the current-session toggle working if browser storage is unavailable.
+    }
   };
 
   const paidValue = orders
@@ -215,6 +232,20 @@ export default function AdminDashboard() {
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleNotifications}
+                aria-pressed={notificationsEnabled}
+                className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
+                  notificationsEnabled
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-300"
+                    : "border-black/10 bg-white text-black/60 hover:border-[#ff1f8f] hover:text-[#ff1f8f]"
+                }`}
+                title={notificationsEnabled ? "Turn off in-app and browser alerts" : "Turn on in-app and browser alerts"}
+              >
+                {notificationsEnabled ? <BellRing className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
+                Alerts {notificationsEnabled ? "on" : "off"}
+              </button>
               {"Notification" in window && (
                 <button
                   type="button"
