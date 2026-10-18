@@ -1,11 +1,5 @@
 project_id = "mndwsmvfcjjrqpanzdkn"
 
-[functions.verify-paystack]
-verify_jwt = false
-
-[functions.paystack-webhook]
-verify_jwt = false
-
 [functions.moolre-payment]
 verify_jwt = false
 

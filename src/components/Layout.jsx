@@ -15,7 +15,6 @@ const PAGE_TITLES = {
   "/special-offers": "Special Offers",
   "/wholesale": "Wholesale Enquiries",
   "/delivery": "Delivery Information",
-  "/payment-success": "Payment Confirmation",
   "/track-order": "Track Your Order",
   "/my-orders": "My Orders",
 };

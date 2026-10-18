@@ -138,7 +138,6 @@ export default function AdminOrders() {
           momo_network,
           payment_status,
           paid_at,
-          payment_reference:paystack_reference,
           moolre_reference,
           status:order_status,
           order_note:delivery_instructions,
@@ -316,53 +315,6 @@ export default function AdminOrders() {
     }
   };
 
-  const verifypaystackPayment = async (order) => {
-    if (
-      updating === order.id ||
-      order.payment_method !== "paystack" ||
-      !["pending", "failed"].includes(order.payment_status) ||
-      !order.payment_reference
-    ) {
-      return;
-    }
-
-    setUpdating(order.id);
-    setError("");
-
-    try {
-      const { data, error: verificationError } = await supabase.functions.invoke(
-        "verify-paystack",
-        { body: { reference: order.payment_reference } }
-      );
-      if (verificationError) throw verificationError;
-
-      await loadOrders(true);
-
-      if (data?.ok === true) {
-        toast({
-          variant: "success",
-          title: "Payment verified",
-          description: `Paystack confirmed payment for order #${order.order_number}.`,
-        });
-        return;
-      }
-      if (data?.reason === "payment_not_successful" && String(data.gateway_status || "").toLowerCase() === "failed") {
-        setError("paystack confirmed that this payment failed. The order has been refreshed.");
-      } else if (data?.reason === "payment_not_successful") {
-        setError("paystack has not confirmed this payment yet. The order remains unpaid.");
-      } else if (data?.reason === "amount_mismatch") {
-        setError("paystack reported a different amount or currency. The order is flagged for review and was not marked paid.");
-      } else {
-        setError("paystack could not confirm this payment. The payment status was not changed.");
-      }
-    } catch (err) {
-      console.error("Could not verify paystack payment:", err);
-      setError(err?.message || "Could not verify the payment with paystack.");
-    } finally {
-      setUpdating(null);
-    }
-  };
-
   const verifyMoolrePayment = async (order) => {
     if (updating === order.id || order.payment_method !== "moolre" || order.payment_status === "paid") return;
     setUpdating(order.id);
@@ -497,7 +449,7 @@ export default function AdminOrders() {
             <div>
               <p className="font-semibold">Cancelled order payment needs review</p>
               <p className="mt-1 leading-6">
-                {stats.paidCancelledOrders} cancelled {stats.paidCancelledOrders === 1 ? "order is" : "orders are"} still marked paid. Confirm each payment was refunded in paystack before treating the paid value as cash retained.
+                {stats.paidCancelledOrders} cancelled {stats.paidCancelledOrders === 1 ? "order is" : "orders are"} still marked paid. Confirm each payment was refunded before treating the paid value as cash retained.
               </p>
             </div>
           </div>
@@ -669,19 +621,12 @@ export default function AdminOrders() {
                       <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-bold">{formatGhs(storedTotal)}</td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <span className={`text-sm font-semibold capitalize ${paymentClass(order.payment_status)}`}>{order.payment_status || "—"}</span>
-                        <p className="mt-0.5 text-xs text-black/40">{order.payment_method === "cash_on_delivery" ? "Pay on Delivery" : order.payment_method === "moolre" ? "Moolre Mobile Money" : order.payment_method === "paystack" ? "Paystack" : "Pay Online"}</p>
+                        <p className="mt-0.5 text-xs text-black/40">{order.payment_method === "cash_on_delivery" ? "Pay on Delivery" : order.payment_method === "moolre" ? "Moolre Mobile Money" : "Legacy online payment"}</p>
                         {order.payment_method === "cash_on_delivery" &&
                           ["pending", "failed"].includes(order.payment_status) &&
                           order.status !== "cancelled" && (
                             <button type="button" onClick={() => markCodPaymentReceived(order)} disabled={updating === order.id} className="mt-2 rounded-lg bg-[#ff1f8f] px-2.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-[#e60078] disabled:cursor-not-allowed disabled:opacity-60">
                               {updating === order.id ? "Saving…" : "Mark received"}
-                            </button>
-                          )}
-                        {order.payment_method === "paystack" &&
-                          ["pending", "failed"].includes(order.payment_status) &&
-                          order.payment_reference && (
-                            <button type="button" onClick={() => verifypaystackPayment(order)} disabled={updating === order.id} className="mt-2 rounded-lg border border-black/15 px-2.5 py-1.5 text-[11px] font-bold text-black/70 transition hover:border-[#ff1f8f] hover:text-[#e60078] disabled:cursor-not-allowed disabled:opacity-60">
-                              {updating === order.id ? "Checking…" : "Check paystack"}
                             </button>
                           )}
                         {order.payment_method === "moolre" && ["pending", "failed"].includes(order.payment_status) && (
@@ -799,15 +744,15 @@ export default function AdminOrders() {
                               </p>
                             )}
 
-                            {order.payment_reference && (
+                            {order.moolre_reference && (
                               <p className="mt-2 break-all text-sm text-black/45">
                                 Reference:{" "}
-                                {order.payment_reference}
+                                {order.moolre_reference}
                               </p>
                             )}
 
                             <p className="mt-3 text-xs text-black/35">
-                              paystack is marked paid after automatic
+                              Online payments are marked paid after gateway
                               verification. For Pay on Delivery, record payment
                               only after you collect the cash or Mobile Money.
                             </p>
@@ -995,18 +940,6 @@ export default function AdminOrders() {
                                     {updating === order.id
                                       ? "Saving…"
                                       : "Mark payment received"}
-                                  </button>
-                                )}
-                              {order.payment_method === "paystack" &&
-                                ["pending", "failed"].includes(order.payment_status) &&
-                                order.payment_reference && (
-                                  <button
-                                    type="button"
-                                    onClick={() => verifypaystackPayment(order)}
-                                    disabled={updating === order.id}
-                                    className="rounded-lg border border-black/15 px-3 py-2 text-xs font-bold text-black/70 transition hover:border-[#ff1f8f] hover:text-[#e60078] disabled:cursor-not-allowed disabled:opacity-60"
-                                  >
-                                    {updating === order.id ? "Checking…" : "Check paystack"}
                                   </button>
                                 )}
                             </div>

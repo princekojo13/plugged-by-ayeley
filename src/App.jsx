@@ -27,7 +27,6 @@ import Contact from "@/pages/Contact";
 import SpecialOffers from "@/pages/SpecialOffers";
 import Wholesale from "@/pages/Wholesale";
 import Delivery from "@/pages/Delivery";
-import PaymentSuccess from "@/pages/PaymentSuccess";
 import TrackOrder from "@/pages/TrackOrder";
 import MyOrders from "@/pages/MyOrders";
 
@@ -269,8 +268,6 @@ function AppRoutes() {
         />
 
         <Route
-          path="/payment-success"
-          element={<PaymentSuccess />}
         />
 
         <Route

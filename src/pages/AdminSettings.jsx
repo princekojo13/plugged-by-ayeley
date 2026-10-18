@@ -29,7 +29,6 @@ const DEFAULT_SETTINGS = {
   moolre_enabled: false,
   cod_accra_only: true,
   cod_max_distance_km: 30,
-  paystack_hold_minutes: 30,
   cod_hold_minutes: 1440,
   store_open: true,
   maintenance_mode: false,
@@ -97,7 +96,7 @@ export default function AdminSettings() {
     const numberFields = [
       "business_latitude", "business_longitude", "delivery_rate",
       "delivery_distance_unit", "distance_multiplier", "low_stock_default",
-      "cod_max_distance_km", "paystack_hold_minutes", "cod_hold_minutes",
+      "cod_max_distance_km", "cod_hold_minutes",
     ];
     const payload = { updated_at: new Date().toISOString() };
     for (const [field] of TEXT_FIELDS) payload[field] = settings[field]?.trim() || null;
@@ -127,9 +126,8 @@ export default function AdminSettings() {
     }
     if (payload.delivery_rate < 0 || payload.delivery_distance_unit <= 0 || payload.distance_multiplier <= 0
       || payload.low_stock_default < 0 || (payload.cod_max_distance_km !== null && payload.cod_max_distance_km < 0)
-      || payload.paystack_hold_minutes < 1 || payload.cod_hold_minutes < 1
+      || payload.cod_hold_minutes < 1
       || !Number.isSafeInteger(payload.low_stock_default)
-      || !Number.isSafeInteger(payload.paystack_hold_minutes)
       || !Number.isSafeInteger(payload.cod_hold_minutes)
       || (payload.max_delivery_distance_km !== null && payload.max_delivery_distance_km <= 0)) {
       setError("Check the delivery, stock, and order hold values.");
@@ -209,7 +207,6 @@ export default function AdminSettings() {
               <Toggle label="Moolre Mobile Money" description="Allow customers to pay online through a Mobile Money request." checked={settings.moolre_enabled} onChange={(value) => updateField("moolre_enabled", value)} />
               <Toggle label="Cash on delivery" description="Allow customers to pay when their order arrives." checked={settings.cod_enabled} onChange={(value) => updateField("cod_enabled", value)} />
               <NumberField label="Low stock alert threshold" value={settings.low_stock_default} min="0" step="1" onChange={(value) => updateField("low_stock_default", value)} />
-              <NumberField label="Online payment stock hold (minutes)" value={settings.paystack_hold_minutes} min="1" step="1" onChange={(value) => updateField("paystack_hold_minutes", value)} />
               <NumberField label="Cash on delivery stock hold (minutes)" value={settings.cod_hold_minutes} min="1" step="1" onChange={(value) => updateField("cod_hold_minutes", value)} />
             </div>
           </SettingsSection>

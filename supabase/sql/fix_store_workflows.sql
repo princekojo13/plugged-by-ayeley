@@ -45,8 +45,8 @@ grant update (
   snapchat, instagram, facebook, tiktok,
   business_latitude, business_longitude, delivery_rate,
   delivery_distance_unit, distance_multiplier, max_delivery_distance_km,
-  low_stock_default, cod_enabled, paystack_enabled, cod_accra_only,
-  cod_max_distance_km, paystack_hold_minutes, cod_hold_minutes,
+  low_stock_default, cod_enabled, moolre_enabled, cod_accra_only,
+  cod_max_distance_km, cod_hold_minutes,
   store_open, maintenance_mode, updated_at
 ) on table public.store_settings to authenticated;
 

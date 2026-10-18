@@ -70,11 +70,11 @@ declare
   v_momo_network text;
   v_store_open boolean;
   v_maintenance_mode boolean;
-  v_paystack_enabled boolean;
+  v_moolre_enabled boolean;
   v_cod_enabled boolean;
 begin
-  select store_open, maintenance_mode, paystack_enabled, cod_enabled
-  into v_store_open, v_maintenance_mode, v_paystack_enabled, v_cod_enabled
+  select store_open, maintenance_mode, moolre_enabled, cod_enabled
+  into v_store_open, v_maintenance_mode, v_moolre_enabled, v_cod_enabled
   from public.store_settings
   where id = true
   for share;
@@ -87,8 +87,8 @@ begin
     raise exception 'The store is currently closed and cannot accept orders';
   end if;
 
-  if lower(btrim(coalesce(p_payment_method, ''))) = 'paystack'
-    and not coalesce(v_paystack_enabled, false) then
+  if lower(btrim(coalesce(p_payment_method, ''))) = 'moolre'
+    and not coalesce(v_moolre_enabled, false) then
     raise exception 'Online payment is currently unavailable';
   end if;
 
