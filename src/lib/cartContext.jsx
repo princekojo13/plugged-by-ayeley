@@ -18,12 +18,15 @@ export function CartProvider({ children }) {
   }, [items]);
 
   const addToCart = useCallback((product, quantity = 1) => {
-    const stock = typeof product.stock === "number" ? product.stock : Infinity;
+    const productStock = Number(product.stock);
+    const stock = Number.isFinite(productStock) ? Math.max(0, productStock) : Infinity;
     if (stock <= 0) return;
+    const max = stock;
+    const requestedQuantity = Math.max(1, Math.floor(Number(quantity) || 1));
     setItems((prev) => {
       const existing = prev.find((i) => i.product_id === product.id);
       if (existing) {
-        const newQty = Math.min(existing.quantity + quantity, max);
+        const newQty = Math.min(existing.quantity + requestedQuantity, max);
         return prev.map((i) =>
           i.product_id === product.id ? { ...i, quantity: newQty } : i
         );
@@ -34,7 +37,7 @@ export function CartProvider({ children }) {
           product_id: product.id,
           name: product.name,
           price: product.sale_price || product.price,
-          quantity: Math.min(quantity, max),
+          quantity: Math.min(requestedQuantity, max),
           image: product.images?.[0] || "",
           stock: product.stock,
         },
