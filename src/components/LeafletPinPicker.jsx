@@ -7,7 +7,7 @@ import {
   useMap,
   useMapEvents,
 } from "react-leaflet";
-import { Search, LoaderCircle, MapPin } from "lucide-react";
+import { Search, LoaderCircle } from "lucide-react";
 import { ACCRA_HUB } from "@/lib/siteConfig";
 import "leaflet/dist/leaflet.css";
 
@@ -15,24 +15,8 @@ const GHANA_BOUNDS = [
   [4.5, -3.5],
   [11.5, 1.5],
 ];
-const GHANA_BBOX = "-3.5,4.5,1.5,11.5";
 const locationSearchCache = new Map();
 let lastLocationSearchAt = 0;
-
-function formatPlaceName(properties = {}) {
-  const parts = [
-    properties.name,
-    properties.housenumber && properties.street
-      ? `${properties.housenumber} ${properties.street}`
-      : properties.street,
-    properties.district,
-    properties.city || properties.locality,
-    properties.county,
-    properties.state,
-    properties.country,
-  ].filter(Boolean);
-  return [...new Set(parts)].join(", ");
-}
 
 function MapClickHandler({ onSelect }) {
   useMapEvents({
@@ -100,38 +84,37 @@ export default function LeafletPinPicker({ location, onSelect }) {
       // Search runs only on submit, and this client-wide delay and cache keep
       // repeat requests to the free community geocoder low.
       const params = new URLSearchParams({
-        q: term,
-        countrycode: "GH",
-        bbox: GHANA_BBOX,
-        lat: String((4.5 + 11.5) / 2),
-        lon: String((-3.5 + 1.5) / 2),
-        lang: "en",
+        q: `${term}, Ghana`,
+        format: "jsonv2",
+        countrycodes: "gh",
+        viewbox: "-3.5,11.5,1.5,4.5",
+        bounded: "1",
+        "accept-language": "en",
         limit: "5",
       });
       lastLocationSearchAt = Date.now();
-      const response = await fetch(`https://photon.komoot.io/api/?${params}`, {
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
         headers: { Accept: "application/json" },
         signal: AbortSignal.timeout(12_000),
       });
       if (response.status === 429) throw new Error("Location search is busy. Please wait a moment and try again.");
       if (!response.ok) throw new Error("Location search is temporarily unavailable. You can still place the pin on the map.");
       const data = await response.json();
-      const places = Array.isArray(data?.features) ? data.features.flatMap((feature) => {
-        const [lng, lat] = feature?.geometry?.coordinates || [];
-        const properties = feature?.properties || {};
-        const displayName = formatPlaceName(properties);
+      const places = Array.isArray(data) ? data.flatMap((place) => {
+        const lat = Number(place?.lat);
+        const lng = Number(place?.lon);
+        const displayName = place?.display_name;
         if (
           !displayName ||
-          properties.countrycode?.toUpperCase() !== "GH" ||
           !Number.isFinite(Number(lat)) ||
           !Number.isFinite(Number(lng)) ||
           Number(lat) < 4.5 || Number(lat) > 11.5 ||
           Number(lng) < -3.5 || Number(lng) > 1.5
         ) return [];
         return [{
-          place_id: `${properties.osm_type || "place"}-${properties.osm_id || `${lat}-${lng}`}`,
+          place_id: String(place.place_id || `${place.osm_type || "place"}-${place.osm_id || `${lat}-${lng}`}`),
           lat: Number(lat),
-          lon: Number(lng),
+          lon: lng,
           display_name: displayName,
         }];
       }) : [];
@@ -141,7 +124,9 @@ export default function LeafletPinPicker({ location, onSelect }) {
     } catch (error) {
       setSearchError(error?.name === "TimeoutError" || error?.name === "AbortError"
         ? "Location search timed out. Please try again. You can still place the pin on the map."
-        : error.message || "Location search is temporarily unavailable. You can still place the pin on the map.");
+        : error?.name === "TypeError"
+          ? "Location search is unavailable right now. You can still place the pin on the map."
+          : error.message || "Location search is temporarily unavailable. You can still place the pin on the map.");
     } finally {
       setSearching(false);
     }
@@ -167,7 +152,6 @@ export default function LeafletPinPicker({ location, onSelect }) {
       <div className="relative z-10 flex gap-2 border-b border-border bg-white p-3">
         <label htmlFor="delivery-map-search" className="sr-only">Search a Ghana location</label>
         <div className="relative min-w-0 flex-1">
-          <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           <input
             id="delivery-map-search"
             type="search"
@@ -183,7 +167,7 @@ export default function LeafletPinPicker({ location, onSelect }) {
             placeholder="Search town, area or landmark"
             maxLength={120}
             autoComplete="street-address"
-            className="ck-input pl-12"
+            className="ck-input pl-3"
           />
         </div>
         <button type="button" onClick={() => void searchLocation()} disabled={searching || query.trim().length < 3} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md bg-pink px-3 text-sm font-semibold text-white transition hover:bg-carbon disabled:cursor-not-allowed disabled:opacity-50">
