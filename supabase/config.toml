@@ -12,6 +12,9 @@ verify_jwt = false
 [functions.request-guest-orders-link]
 verify_jwt = false
 
+[functions.search-location]
+verify_jwt = false
+
 [functions.customer-orders]
 verify_jwt = false
 

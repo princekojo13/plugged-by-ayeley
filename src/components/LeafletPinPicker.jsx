@@ -9,6 +9,7 @@ import {
 } from "react-leaflet";
 import { Search, LoaderCircle } from "lucide-react";
 import { ACCRA_HUB } from "@/lib/siteConfig";
+import { supabase } from "@/lib/supabaseClient";
 import "leaflet/dist/leaflet.css";
 
 const GHANA_BOUNDS = [
@@ -83,24 +84,13 @@ export default function LeafletPinPicker({ location, onSelect }) {
       if (waitMs > 0) await new Promise((resolve) => window.setTimeout(resolve, waitMs));
       // Search runs only on submit, and this client-wide delay and cache keep
       // repeat requests to the free community geocoder low.
-      const params = new URLSearchParams({
-        q: `${term}, Ghana`,
-        format: "jsonv2",
-        countrycodes: "gh",
-        viewbox: "-3.5,11.5,1.5,4.5",
-        bounded: "1",
-        "accept-language": "en",
-        limit: "5",
-      });
       lastLocationSearchAt = Date.now();
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
-        headers: { Accept: "application/json" },
-        signal: AbortSignal.timeout(12_000),
+      const { data, error } = await supabase.functions.invoke("search-location", {
+        body: { query: term },
       });
-      if (response.status === 429) throw new Error("Location search is busy. Please wait a moment and try again.");
-      if (!response.ok) throw new Error("Location search is temporarily unavailable. You can still place the pin on the map.");
-      const data = await response.json();
-      const places = Array.isArray(data) ? data.flatMap((place) => {
+      if (error) throw new Error("Location search is temporarily unavailable. You can still place the pin on the map.");
+      if (data?.error) throw new Error(data.error);
+      const places = Array.isArray(data?.places) ? data.places.flatMap((place) => {
         const lat = Number(place?.lat);
         const lng = Number(place?.lon);
         const displayName = place?.display_name;
